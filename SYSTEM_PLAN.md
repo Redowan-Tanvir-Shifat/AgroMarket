@@ -171,11 +171,50 @@ The web application consists of **12 main pages**, organized cleanly by layout a
   * Complete product grid of active produce listed by this farmer.
 
 ### 5. Authentication Pages (`/login`, `/register`)
-* **Purpose:** Secure multi-role user onboarding.
-* **Features Covered:**
-  * Unified modal/page with tab toggle (**ক্রেতা অ্যাকাউন্ট** vs. **কৃষক/বিক্রেতা অ্যাকাউন্ট**).
-  * Inputs: Full Name, Phone Number (+880), Email, Password, District/Address, Role Selection.
-  * Farmer-specific field: Farm Name & Division/District selection.
+* **Purpose:** Secure multi-role user onboarding and authentication tailored for Bangladeshi buyers, farmers, and administrators.
+* **Layout & Design:** Clean eco-green card interface with role-switching tab bar, bilingual field placeholders (Bangla & English), live mobile validation (+880), and clear visual distinction between user roles.
+
+#### 🔑 5.1 Login Page Inputs (`/login`)
+* **Role Selection / Context (Optional Toggle or Auto-Detected):**
+  * Switcher tabs: `🛒 Buyer (ক্রেতা)` | `🚜 Farmer / Seller (কৃষক/বিক্রেতা)` | `👑 Admin (অ্যাডমিন)` (or single unified login auto-detecting user role via JWT).
+* **Input Fields:**
+  1. **Mobile Number / Email (মোবাইল নম্বর অথবা ইমেইল):** Standard Bangladeshi mobile format (`017xxxxxxxx` or `+88017xxxxxxxx`) or Email address.
+  2. **Password (পাসওয়ার্ড):** Masked input field with a toggleable eye icon to show/hide password.
+  3. **Remember Me Checkbox (মনে রাখুন):** Option to persist auth session token in LocalStorage.
+  4. **Actions / Links:** "Forgot Password?" (পাসওয়ার্ড ভুলে গেছেন?) recovery trigger & link to Registration page.
+
+#### 📝 5.2 Registration / Signup Page Inputs (`/register`)
+Multi-role tab toggle at top: `🛒 Buyer Account (ক্রেতা অ্যাকাউন্ট)` vs. `🚜 Farmer / Seller Account (কৃষক/বিক্রেতা অ্যাকাউন্ট)`.
+
+##### A. Common Base Account Fields (All Roles):
+1. **Full Name (সম্পূর্ণ নাম):** Required (e.g. *Md. Rahim Uddin / মো: রহিম উদ্দিন*).
+2. **Mobile Number (মোবাইল নম্বর):** Required (+880 validation, 11-digit Bangladeshi mobile string e.g. `01712345678`), used for SMS delivery notifications & bKash verification.
+3. **Email Address (ইমেইল ঠিকানা):** Optional for farmers, required for buyers/admins.
+4. **Password (পাসওয়ার্ড):** Minimum 6-8 characters with dynamic password strength meter.
+5. **Confirm Password (পাসওয়ার্ড নিশ্চিত করুন):** Must match password field.
+
+##### B. Role-Specific Signup Fields:
+
+###### 🛒 1. Buyer (ক্রেতা) Registration Specific Inputs:
+* **Division (বিভাগ):** Dropdown select (Dhaka, Rajshahi, Chattogram, Rangpur, Khulna, Barishal, Sylhet, Mymensingh).
+* **District (জেলা):** Dynamic dropdown dependent on selected Division (e.g., Bogura, Dinajpur, Jessore, Dhaka, etc.).
+* **Upazila / Thana (উপজেলা / থানা):** Text input or dropdown for granular location tracking.
+* **Delivery Address (বিস্তারিত ডেলিভারি ঠিকানা):** Textarea for street address, house/holding number, road name.
+* **Default Payment Preference (পছন্দনীয় পেমেন্ট মাধ্যম - Optional):** Quick select (`bKash`, `Nagad`, `Rocket`, `Cash on Delivery`).
+
+###### 🚜 2. Farmer / Seller (কৃষক / বিক্রেতা) Registration Specific Inputs:
+* **Farm / Business Name (খামার বা ব্যবসার নাম):** Required (e.g. *রাজশাহী ম্যাঙ্গো এগ্রো* / *রহিম অর্গানিক ফার্ম*).
+* **Farm Division (খামারের বিভাগ):** Dropdown select (Origin location of crops).
+* **Farm District (খামারের জেলা):** Dropdown select (e.g., Dinajpur, Bogura, Rajshahi, Jessore).
+* **Farm Upazila / Union (খামারের উপজেলা / ইউনিয়ন):** Detailed origin for local produce pickup & courier dispatch.
+* **Detailed Farm Address (খামারের বিস্তারিত ঠিকানা):** Physical location of farm or agricultural warehouse.
+* **Primary Produce Category (প্রধান ফসলের ধরণ):** Multi-select tags (e.g., *চাল ও শস্য*, *ফল/আম/লিচু*, *সবজি*, *মসলা*, *দুগ্ধ ও ডিম*).
+* **NID / Trade License Number (জাতীয় পরিচয়পত্র / ট্রেড লাইসেন্স নম্বর):** Optional for verification badge (`যাচাইকৃত কৃষক` badge on storefront).
+* **Mobile Banking Disbursement Account (বিক্রয়ের টাকা গ্রহণের নম্বর):** Account choice (`bKash`, `Nagad`, `Rocket`, `Bank Account`) + account number for automatic payouts.
+
+###### 👑 3. Admin Account Signup (System Restricted / Seeded):
+* Admins are created internally or seeded during initialization. Required inputs: Full Name, Email, Mobile Number, Master Admin Passcode / Security Key, System Privileges Level.
+
 
 ### 6. Cart & Checkout Page (`/checkout`)
 * **Purpose:** Seamless purchase completion in BDT.
@@ -284,6 +323,7 @@ erDiagram
         string phone
         string division
         string district
+        string upazila
         string address
         timestamp created_at
     }
@@ -296,6 +336,9 @@ erDiagram
         string district
         string upazila
         string bio
+        string nid_trade_license
+        enum payout_method "BKASH, NAGAD, ROCKET, BANK"
+        string payout_number
         decimal rating_avg
         int total_ratings
         timestamp created_at
@@ -376,12 +419,13 @@ erDiagram
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     full_name VARCHAR(100) NOT NULL,
-    email VARCHAR(150) NOT NULL UNIQUE,
+    email VARCHAR(150) UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role ENUM('buyer', 'seller', 'admin') NOT NULL DEFAULT 'buyer',
-    phone VARCHAR(20) NOT NULL,
+    phone VARCHAR(20) NOT NULL UNIQUE,
     division VARCHAR(50) DEFAULT 'Dhaka',
     district VARCHAR(50) DEFAULT 'Dhaka',
+    upazila VARCHAR(50),
     address TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -395,6 +439,9 @@ CREATE TABLE sellers (
     district VARCHAR(50) NOT NULL,
     upazila VARCHAR(50),
     bio TEXT,
+    nid_trade_license VARCHAR(50),
+    payout_method ENUM('BKASH', 'NAGAD', 'ROCKET', 'BANK') DEFAULT 'BKASH',
+    payout_number VARCHAR(20),
     rating_avg DECIMAL(3,2) DEFAULT 0.00,
     total_ratings INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
