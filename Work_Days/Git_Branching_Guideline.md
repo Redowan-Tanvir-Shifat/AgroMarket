@@ -1,89 +1,92 @@
-# 🌿 AgroMarket - Git Branching & Merge Workflow Guide
+# 🌿 AgroMarket - Team Git Branching & Workflow Guide
 
-This guide details the step-by-step process for working on the `dev` branch daily, committing changes safely, and merging into the production `main` branch when features are tested and approved.
-
----
-
-## 🔀 Overview of Branching Strategy
-
-* **`dev` Branch**: Your primary active working branch. All day-to-day coding, feature building, and UI fixes happen here.
-* **`main` Branch**: Production-ready code only. Updated by merging from `dev`.
+This guide details the 3-tier branching strategy for team collaboration: personal development on your personal branch (`redowan`), integration on the shared team branch (`dev`), and production deployment on `main`.
 
 ---
 
-## 💻 Step-by-Step Daily Workflow
+## 🔀 3-Tier Branching Strategy
 
-### 1. Daily Development (Working on `dev`)
-Always ensure you are on the `dev` branch before starting work:
+| Branch | Purpose | Who Works Here |
+| :--- | :--- | :--- |
+| **`redowan`** | Personal Feature Branch (Daily Coding) | You |
+| **`dev`** | Shared Team Integration Branch | You + Teammates |
+| **`main`** | Production Release Branch | Project Lead |
+
+---
+
+## 💻 Step 1: Daily Development (Working on `redowan`)
+
+Always work on your personal branch `redowan`:
 
 ```bash
 # Check current active branch
 git branch
 
-# Switch to dev branch if not already on it
-git checkout dev
+# Switch to redowan branch
+git checkout redowan
+
+# Stage, commit & push your daily work to your remote redowan branch
+git add .
+git commit -m "Implement feature X"
+git push origin redowan
 ```
 
 ---
 
-### 2. Save & Push Work to `dev` Branch
-At the end of a work section or day, commit and push your changes to `dev`:
+## 🤝 Step 2: Merge Your Work into Shared `dev` Branch (Team Integration)
+
+When a feature on `redowan` is complete and ready to share with your teammate:
 
 ```bash
-# Step A: Stage all modified files
+# A. Make sure redowan is up to date
+git checkout redowan
 git add .
+git commit -m "Finalize feature before merging to dev"
+git push origin redowan
 
-# Step B: Commit changes with a descriptive message
-git commit -m "Add Day 2 features and UI updates"
+# B. Switch to dev branch and pull latest team updates
+git checkout dev
+git pull origin dev
 
-# Step C: Push commits to GitHub dev branch
+# C. Merge redowan into dev
+git merge redowan
+
+# D. Push updated dev branch to GitHub so your teammate gets your changes
 git push origin dev
+
+# E. Switch back to your redowan branch to continue coding
+git checkout redowan
 ```
 
 ---
 
-## 🚀 How to Merge `dev` into `main` (When Everything is Ready)
+## 🚀 Step 3: Merge `dev` into `main` (Production Release)
 
-When all features on `dev` are tested, verified, and ready for production release, follow these 4 steps:
+When all team features on `dev` are tested and ready for production release:
 
-### Step 1: Ensure `dev` is clean and committed
 ```bash
-git checkout dev
-git add .
-git commit -m "Finalize Day 2 updates"
-git push origin dev
-```
-
-### Step 2: Switch to `main` branch
-```bash
+# A. Switch to main and pull latest main
 git checkout main
-```
+git pull origin main
 
-### Step 3: Merge `dev` into `main`
-```bash
+# B. Merge dev into main
 git merge dev
-```
-*(This brings all commits from `dev` directly into `main`)*
 
-### Step 4: Push updated `main` to GitHub
-```bash
+# C. Push to main on GitHub
 git push origin main
+
+# D. Switch back to redowan branch
+git checkout redowan
 ```
 
 ---
 
-## 🔁 Return to `dev` for Next Day's Work
+## 🛠 Useful Helper Commands
 
-Once `main` is updated, **always switch back to `dev`** to continue building new features:
-
-```bash
-git checkout dev
-```
-
----
-
-## 🛠 Useful Git Helper Commands
-
-* **Check current status & modified files**: `git status`
-* **Check commit history**: `git log --oneline -n 5`
-* **List local and remote branches**: `git branch -a`
+* **Check current active branch**: `git branch`
+* **Check status & modified files**: `git status`
+* **Sync your `redowan` branch with latest team `dev`**:
+  ```bash
+  git checkout redowan
+  git merge dev
+  ```
