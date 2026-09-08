@@ -3,6 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+import sellerRoutes from './routes/sellerRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import wishlistRoutes from './routes/wishlistRoutes.js';
 
 dotenv.config();
 
@@ -16,6 +20,10 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/seller', sellerRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/wishlists', wishlistRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

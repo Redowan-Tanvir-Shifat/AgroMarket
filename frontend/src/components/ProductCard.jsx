@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import FreshnessBadge from './FreshnessBadge';
 import { useLanguage } from '../context/LanguageContext';
 import { MapPin, ShieldCheck, ShoppingBag, Star, Calendar } from 'lucide-react';
+import { formatHarvestAge } from '../utils/formatters';
 
 export default function ProductCard({ product }) {
   const { t, lang } = useLanguage();
@@ -33,8 +34,8 @@ export default function ProductCard({ product }) {
   // Title translation logic
   const displayTitle = (lang === 'bn' && title_bn) ? title_bn : title;
 
-  // Format harvest hours
-  const hoursAgo = Math.max(1, Math.round((parseFloat(age_in_days) || 0) * 24));
+  // Format harvest time (e.g. 16d 15h ago / ১৬ দিন ১৫ ঘণ্টা আগে)
+  const harvestTimeFormatted = formatHarvestAge(age_in_days, lang);
 
   return (
     <div className="group bg-white rounded-3xl overflow-hidden border border-emerald-100 shadow-xs hover:shadow-xl hover:border-emerald-300 transition-all duration-300 flex flex-col justify-between">
@@ -66,7 +67,7 @@ export default function ProductCard({ product }) {
         {/* Harvest Date Tag */}
         <div className="absolute bottom-3 left-3 bg-emerald-950/80 backdrop-blur-md text-emerald-200 text-[11px] font-medium px-2.5 py-1 rounded-lg flex items-center gap-1.5 border border-emerald-500/30">
           <Calendar className="w-3 h-3 text-emerald-400" />
-          <span>{t('harvested')}: {hoursAgo} {t('hoursAgo')}</span>
+          <span>{t('harvested')}: {harvestTimeFormatted} {lang === 'bn' ? 'আগে' : 'ago'}</span>
         </div>
       </div>
 

@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin } from 'lucide-react';
+import { useCart } from '../context/CartContext';
+import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logoutUser } = useAuth();
   const { lang, toggleLanguage, t } = useLanguage();
+  const { totalItemsCount } = useCart();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [divisionDropdownOpen, setDivisionDropdownOpen] = useState(false);
@@ -124,11 +126,13 @@ export default function Navbar() {
             </button>
 
             {/* Cart Icon Preview */}
-            <Link to="/checkout" className="relative p-2 text-slate-700 hover:text-emerald-600 transition-colors">
+            <Link to="/checkout" className="relative p-2 text-slate-700 hover:text-emerald-600 transition-colors" title="Shopping Cart">
               <ShoppingCart className="w-6 h-6" />
-              <span className="absolute top-0 right-0 w-5 h-5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                2
-              </span>
+              {totalItemsCount > 0 && (
+                <span className="absolute top-0 right-0 w-5 h-5 bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-in zoom-in">
+                  {totalItemsCount}
+                </span>
+              )}
             </Link>
 
             {/* Auth Buttons / Profile Dropdown */}
@@ -156,6 +160,29 @@ export default function Navbar() {
                       <p className="text-xs text-slate-500 font-medium">লগইন অ্যাকাউন্ট</p>
                       <p className="text-xs font-bold text-slate-800 truncate">{user.phone}</p>
                     </div>
+
+                    {/* Buyer Dashboard Links */}
+                    {user.role === 'buyer' && (
+                      <>
+                        <Link
+                          to="/account/orders"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <Package className="w-4 h-4 text-emerald-600" />
+                          {t('myOrdersTitle')}
+                        </Link>
+                        <Link
+                          to="/account/wishlist"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <Bookmark className="w-4 h-4 text-emerald-600" />
+                          {t('wishlistTitle')}
+                        </Link>
+                      </>
+                    )}
+
                     {user.role === 'seller' && (
                       <Link
                         to="/seller/dashboard"
