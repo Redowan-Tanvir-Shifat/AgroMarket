@@ -6,7 +6,7 @@ export const getProducts = async (req, res) => {
   try {
     const { category, division, district, search, sort, limit = 20 } = req.query;
 
-    let sql = `SELECT * FROM v_active_products WHERE computed_status != 'EXPIRED'`;
+    let sql = `SELECT * FROM v_active_products WHERE status != 'EXPIRED' AND computed_status != 'EXPIRED'`;
     const params = [];
 
     if (category) {
@@ -73,7 +73,7 @@ export const getHomeSummary = async (req, res) => {
     // 2. Featured Produce (Super Fresh / Top Rated Farmers)
     const [featured] = await pool.query(`
       SELECT * FROM v_active_products
-      WHERE computed_status != 'EXPIRED'
+      WHERE status != 'EXPIRED' AND computed_status != 'EXPIRED'
       ORDER BY harvest_date DESC
       LIMIT 6
     `);
@@ -82,7 +82,7 @@ export const getHomeSummary = async (req, res) => {
     const [agingDeals] = await pool.query(`
       SELECT *, (base_price_bdt - current_dynamic_price_bdt) AS savings_bdt
       FROM v_active_products
-      WHERE computed_status != 'EXPIRED' AND current_dynamic_price_bdt < base_price_bdt
+      WHERE status != 'EXPIRED' AND computed_status != 'EXPIRED' AND current_dynamic_price_bdt < base_price_bdt
       ORDER BY savings_bdt DESC
       LIMIT 4
     `);
@@ -91,6 +91,7 @@ export const getHomeSummary = async (req, res) => {
     const [divisionCounts] = await pool.query(`
       SELECT farm_division, COUNT(id) as total_produce, COUNT(DISTINCT seller_id) as total_farmers
       FROM v_active_products
+      WHERE status != 'EXPIRED' AND computed_status != 'EXPIRED'
       GROUP BY farm_division
     `);
 
@@ -117,7 +118,7 @@ export const getHomeSummary = async (req, res) => {
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
-    const [products] = await pool.query(`SELECT * FROM v_active_products WHERE id = ?`, [id]);
+    const [products] = await pool.query(`SELECT * FROM v_active_products WHERE id = ? AND status != 'EXPIRED'`, [id]);
 
     if (products.length === 0) {
       return res.status(404).json({ message: 'Product not found' });

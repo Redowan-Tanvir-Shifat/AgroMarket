@@ -17,6 +17,9 @@ import SellerStorefront from './pages/SellerStorefront';
 import CartCheckout from './pages/CartCheckout';
 import BuyerOrders from './pages/BuyerOrders';
 import Wishlist from './pages/Wishlist';
+import SellerDashboard from './pages/SellerDashboard';
+import SellerInventory from './pages/SellerInventory';
+import SellerProductForm from './pages/SellerProductForm';
 
 export default function App() {
   return (
@@ -38,6 +41,10 @@ export default function App() {
                   <Route path="/checkout" element={<CartCheckout />} />
                   <Route path="/account/orders" element={<BuyerOrders />} />
                   <Route path="/account/wishlist" element={<Wishlist />} />
+                  <Route path="/seller/dashboard" element={<SellerDashboard />} />
+                  <Route path="/seller/inventory" element={<SellerInventory />} />
+                  <Route path="/seller/products/new" element={<SellerProductForm />} />
+                  <Route path="/seller/products/:id/edit" element={<SellerProductForm />} />
                 </Routes>
               </main>
               <Footer />

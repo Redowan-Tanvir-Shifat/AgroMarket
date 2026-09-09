@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
-import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package } from 'lucide-react';
+import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package, Layers, Truck, PlusCircle, Wallet } from 'lucide-react';
 
 export default function Navbar() {
   const { user, logoutUser } = useAuth();
@@ -184,14 +184,48 @@ export default function Navbar() {
                     )}
 
                     {user.role === 'seller' && (
-                      <Link
-                        to="/seller/dashboard"
-                        className="flex items-center gap-2 px-4 py-2.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
-                        onClick={() => setUserDropdownOpen(false)}
-                      >
-                        <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                        কৃষক ড্যাশবোর্ড ও আয়
-                      </Link>
+                      <>
+                        <Link
+                          to="/seller/dashboard"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-bold"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          {t('sellerDashboardTitle')}
+                        </Link>
+                        <Link
+                          to="/seller/inventory"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <Layers className="w-4 h-4 text-emerald-600" />
+                          {t('manageInventoryBtn')}
+                        </Link>
+                        <Link
+                          to="/seller/orders"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <Truck className="w-4 h-4 text-emerald-600" />
+                          {t('manageOrdersBtn')}
+                        </Link>
+                        <Link
+                          to="/seller/products/new"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <PlusCircle className="w-4 h-4 text-emerald-600" />
+                          {t('addNewCropBtn')}
+                        </Link>
+                        <Link
+                          to="/seller/profile"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <Wallet className="w-4 h-4 text-emerald-600" />
+                          {t('sellerProfileTitle')}
+                        </Link>
+                      </>
                     )}
                     <button
                       onClick={handleLogout}
@@ -274,6 +308,30 @@ export default function Navbar() {
           {user ? (
             <div className="pt-2 space-y-2 border-t border-slate-100">
               <div className="text-xs font-bold text-emerald-800">লগইন: {user.fullName}</div>
+              {user.role === 'seller' && (
+                <div className="space-y-1 py-1 border-y border-slate-100">
+                  <NavLink to="/seller/dashboard" className={mobileNavLinkStyle} onClick={() => setMobileMenuOpen(false)}>
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>{t('sellerDashboardTitle')}</span>
+                  </NavLink>
+                  <NavLink to="/seller/inventory" className={mobileNavLinkStyle} onClick={() => setMobileMenuOpen(false)}>
+                    <Layers className="w-4 h-4 text-emerald-600" />
+                    <span>{t('manageInventoryBtn')}</span>
+                  </NavLink>
+                  <NavLink to="/seller/orders" className={mobileNavLinkStyle} onClick={() => setMobileMenuOpen(false)}>
+                    <Truck className="w-4 h-4 text-emerald-600" />
+                    <span>{t('manageOrdersBtn')}</span>
+                  </NavLink>
+                  <NavLink to="/seller/products/new" className={mobileNavLinkStyle} onClick={() => setMobileMenuOpen(false)}>
+                    <PlusCircle className="w-4 h-4 text-emerald-600" />
+                    <span>{t('addNewCropBtn')}</span>
+                  </NavLink>
+                  <NavLink to="/seller/profile" className={mobileNavLinkStyle} onClick={() => setMobileMenuOpen(false)}>
+                    <Wallet className="w-4 h-4 text-emerald-600" />
+                    <span>{t('sellerProfileTitle')}</span>
+                  </NavLink>
+                </div>
+              )}
               <button
                 onClick={handleLogout}
                 className="w-full text-left py-2 text-sm font-bold text-rose-600"

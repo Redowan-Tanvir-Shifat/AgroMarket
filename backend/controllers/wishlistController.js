@@ -10,7 +10,7 @@ export const getWishlist = async (req, res) => {
       `SELECT w.id as wishlist_id, w.created_at as saved_at, p.*
        FROM wishlists w
        JOIN v_active_products p ON w.product_id = p.id
-       WHERE w.buyer_id = ? AND p.computed_status != 'EXPIRED'
+       WHERE w.buyer_id = ? AND p.status != 'EXPIRED' AND p.computed_status != 'EXPIRED'
        ORDER BY w.created_at DESC`,
       [buyerId]
     );

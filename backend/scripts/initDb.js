@@ -174,6 +174,7 @@ async function initDatabase() {
         c.slug AS category_slug,
         TIMESTAMPDIFF(HOUR, p.harvest_date, NOW()) / 24.0 AS age_in_days,
         CASE 
+          WHEN p.status = 'EXPIRED' THEN 0.00
           WHEN TIMESTAMPDIFF(HOUR, p.harvest_date, NOW()) / 24.0 >= p.max_shelf_life_days THEN 0.00
           WHEN (TIMESTAMPDIFF(HOUR, p.harvest_date, NOW()) / 24.0) / p.max_shelf_life_days <= 0.1 THEN p.base_price_bdt
           ELSE GREATEST(
@@ -182,6 +183,7 @@ async function initDatabase() {
           )
         END AS current_dynamic_price_bdt,
         CASE 
+          WHEN p.status = 'EXPIRED' THEN 'EXPIRED'
           WHEN TIMESTAMPDIFF(HOUR, p.harvest_date, NOW()) / 24.0 >= p.max_shelf_life_days THEN 'EXPIRED'
           WHEN p.stock_quantity <= 0 THEN 'OUT_OF_STOCK'
           WHEN p.stock_quantity <= p.low_stock_threshold THEN 'LOW_STOCK'
