@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,13 @@ import {
   MapPin,
   Star,
   RefreshCw,
-  ChevronRight
+  ChevronRight,
+  BarChart3,
+  Award,
+  Users,
+  ShoppingBag,
+  ArrowUpRight,
+  Calendar
 } from 'lucide-react';
 
 export default function SellerDashboard() {
@@ -28,10 +34,34 @@ export default function SellerDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
+  const [searchParams] = useSearchParams();
+  const sellerIdParam = searchParams.get('sellerId');
   const [selectedSellerId, setSelectedSellerId] = useState(() => {
+    if (sellerIdParam) {
+      const parsed = parseInt(sellerIdParam);
+      if (!isNaN(parsed)) return parsed;
+    }
     // If logged-in user is seller, default to their profile; otherwise demo seller 1
     return user?.sellerProfile?.id || 1;
   });
+
+  useEffect(() => {
+    if (sellerIdParam) {
+      const parsed = parseInt(sellerIdParam);
+      if (!isNaN(parsed) && parsed !== selectedSellerId) {
+        setSelectedSellerId(parsed);
+      }
+    }
+  }, [sellerIdParam]);
+
+  const [trendMode, setTrendMode] = useState('daily');
+  const [chartMounted, setChartMounted] = useState(false);
+
+  useEffect(() => {
+    setChartMounted(false);
+    const timer = setTimeout(() => setChartMounted(true), 50);
+    return () => clearTimeout(timer);
+  }, [trendMode, selectedSellerId, data]);
 
   useEffect(() => {
     fetchDashboardData(selectedSellerId);
@@ -51,6 +81,7 @@ export default function SellerDashboard() {
 
   const seller = data?.seller || {};
   const kpis = data?.kpis || {};
+  const insights = data?.insights || {};
   const recentOrders = data?.recentOrders || [];
   const urgentAlerts = data?.urgentAlerts || [];
 
@@ -109,31 +140,6 @@ export default function SellerDashboard() {
               <span>{t('addNewCropBtn')}</span>
             </Link>
           </div>
-        </div>
-
-        {/* Demo Seller Switcher (for testing convenience) */}
-        <div className="mt-6 pt-4 border-t border-emerald-800/60 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-emerald-300 font-semibold flex items-center gap-1">
-            <RefreshCw className="w-3 h-3" />
-            {lang === 'bn' ? 'পরীক্ষামূলক কৃষক পরিবর্তন:' : 'Demo Seller Switcher:'}
-          </span>
-          {[
-            { id: 1, name: 'রাজশাহী আম হাব (রফিকুল)' },
-            { id: 2, name: 'দিনাজপুর লিচু ও চাল (তারিকুল)' },
-            { id: 3, name: 'বগুড়া সবজি ভান্ডার (কালাম)' }
-          ].map((demo) => (
-            <button
-              key={demo.id}
-              onClick={() => setSelectedSellerId(demo.id)}
-              className={`px-3 py-1 rounded-full font-bold transition-all ${
-                selectedSellerId === demo.id
-                  ? 'bg-emerald-400 text-emerald-950 shadow-xs'
-                  : 'bg-emerald-900/60 text-emerald-200 hover:bg-emerald-800/80'
-              }`}
-            >
-              {demo.name}
-            </button>
-          ))}
         </div>
       </div>
 
@@ -288,7 +294,7 @@ export default function SellerDashboard() {
             </Link>
 
             <Link
-              to="/seller/profile"
+              to={`/seller/profile?sellerId=${selectedSellerId}`}
               className="p-5 rounded-3xl bg-white hover:bg-slate-50 text-slate-800 font-bold border border-slate-200 transition-all shadow-xs flex items-center justify-between group"
             >
               <div className="flex items-center gap-3">
@@ -304,6 +310,443 @@ export default function SellerDashboard() {
               </div>
               <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform text-slate-400" />
             </Link>
+          </div>
+
+          {/* ========================================================= */}
+          {/* SELLER BUSINESS INSIGHTS & PERFORMANCE ANALYTICS SECTION   */}
+          {/* ========================================================= */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/90 space-y-8 relative overflow-hidden">
+            <div className="absolute top-0 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-10 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 border-b border-slate-100 pb-6">
+              <div className="space-y-1.5">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{t('sellerInsightsTag')}</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                  <span>{t('sellerInsightsTitle')}</span>
+                  <span className="text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-md bg-emerald-100 border border-emerald-200 hidden sm:inline-block">
+                    {lang === 'bn' ? 'লাইভ ডাটা' : 'Live Data'}
+                  </span>
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-2xl">
+                  {t('sellerInsightsSubtitle')}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl shrink-0 self-start sm:self-center font-medium">
+                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{lang === 'bn' ? 'চলতি কৃষি মৌসুম ২০২৬' : 'Agri Season 2026'}</span>
+              </div>
+            </div>
+
+            {/* 4 Insight Stat Metrics Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
+              {/* Metric 1: Average Order Value */}
+              <div className="p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-emerald-300 hover:shadow-xs space-y-1.5 transition-all">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                  <span>{t('avgOrderValueLabel')}</span>
+                  <ShoppingBag className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-2xl font-black text-slate-900">
+                  ৳{(insights.avgOrderValue || 0).toLocaleString()}
+                </div>
+                <p className="text-[11px] text-emerald-700 flex items-center gap-1 font-semibold">
+                  <ArrowUpRight className="w-3 h-3" />
+                  {lang === 'bn' ? 'প্রতি ক্রয়ে গড় বিক্রয় আয়' : 'Average basket size'}
+                </p>
+              </div>
+
+              {/* Metric 2: Unique & Repeat Buyers */}
+              <div className="p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-blue-300 hover:shadow-xs space-y-1.5 transition-all">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                  <span>{t('repeatCustomerRateLabel')}</span>
+                  <Users className="w-4 h-4 text-blue-600" />
+                </div>
+                <div className="text-2xl font-black text-slate-900 flex items-baseline gap-2">
+                  <span>{insights.repeatRate || 0}%</span>
+                  <span className="text-xs text-slate-500 font-normal">
+                    ({insights.uniqueBuyers || 0} {lang === 'bn' ? 'জন ক্রেতা' : 'buyers'})
+                  </span>
+                </div>
+                <p className="text-[11px] text-blue-700 flex items-center gap-1 font-semibold">
+                  <CheckCircle2 className="w-3 h-3" />
+                  {lang === 'bn' ? 'পুনরাবৃত্ত গ্রাহক আস্থা' : 'Repeat customer loyalty'}
+                </p>
+              </div>
+
+              {/* Metric 3: Delivery Channel Preference */}
+              <div className="p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-amber-300 hover:shadow-xs space-y-1.5 transition-all">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                  <span>{lang === 'bn' ? 'হোম ডেলিভারি শেয়ার' : 'Home Delivery Share'}</span>
+                  <Truck className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-2xl font-black text-slate-900 flex items-baseline gap-2">
+                  <span>{insights.fulfillment?.deliveryPercent || 0}%</span>
+                  <span className="text-xs text-slate-500 font-normal">
+                    ({insights.fulfillment?.deliveryCount || 0} {lang === 'bn' ? 'অর্ডার' : 'orders'})
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-700 font-semibold">
+                  {insights.fulfillment?.pickupPercent || 0}% {lang === 'bn' ? 'খামার গেট থেকে সংগ্রহ' : 'Direct Gate Pickup'}
+                </p>
+              </div>
+
+              {/* Metric 4: Spoilage Saved via Aging Engine */}
+              <div className="p-5 rounded-2xl bg-slate-50/70 hover:bg-white border border-slate-200/80 hover:border-emerald-300 hover:shadow-xs space-y-1.5 transition-all">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
+                  <span>{lang === 'bn' ? 'পচন রোধে উদ্ধারকৃত আয়' : 'Spoilage Recovered BDT'}</span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-2xl font-black text-emerald-700">
+                  ৳{(insights.spoilageSavedBdt || 0).toLocaleString()}
+                </div>
+                <p className="text-[11px] text-emerald-700 font-semibold">
+                  {lang === 'bn' ? 'ডাইনামিক মূল্যছাড়ে বিক্রিত' : 'Saved from post-harvest waste'}
+                </p>
+              </div>
+            </div>
+
+            {/* 2-Column Main Insights Grid: Chart (Monthly Trend) & Leaderboard (Top Crops) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10 items-stretch">
+              
+              {/* Column 1: Revenue Trajectory Visualizer (7 cols) */}
+              <div className="lg:col-span-7 bg-slate-50/60 border border-slate-200/80 rounded-3xl p-6 sm:p-7 space-y-6 flex flex-col justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      <span>{trendMode === 'daily' ? (lang === 'bn' ? 'দৈনিক বিক্রয় ও রাজস্ব গতিপথ' : 'Daily Sales Trajectory') : t('revenueTrendTitle')}</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {trendMode === 'daily'
+                        ? (lang === 'bn' ? 'গত ৭ দিনের প্রকৃত বিক্রয় ও রাজস্ব' : 'Real sales & revenue over the past 7 days')
+                        : (lang === 'bn' ? 'বিগত ৬ মাসের প্রকৃত বিক্রয় ও রাজস্ব' : 'Real sales & revenue over past 6 months')}
+                    </p>
+                  </div>
+
+                  {/* Toggle Daily vs Monthly */}
+                  <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-xs self-start sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setTrendMode('daily')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        trendMode === 'daily'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {lang === 'bn' ? 'দৈনিক (৭ দিন)' : 'Daily (7D)'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTrendMode('monthly')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                        trendMode === 'monthly'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {lang === 'bn' ? 'মাসিক (৬ মাস)' : 'Monthly (6M)'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Styled Interactive Bar Plot with X & Y Axes */}
+                <div className="pt-2">
+                  {(() => {
+                    const activeList = trendMode === 'daily' ? (insights.dailyTrends || []) : (insights.monthlyTrends || []);
+                    const rawMax = Math.max(...activeList.map(x => x.revenue || 0), 0);
+                    
+                    // Nice Y-axis ceiling
+                    const getNiceMax = (val) => {
+                      if (!val || val <= 0) return 500;
+                      if (val <= 100) return 100;
+                      if (val <= 500) return Math.ceil(val / 50) * 50;
+                      if (val <= 1000) return Math.ceil(val / 100) * 100;
+                      if (val <= 5000) return Math.ceil(val / 500) * 500;
+                      if (val <= 15000) return Math.ceil(val / 1000) * 1000;
+                      return Math.ceil(val / 5000) * 5000;
+                    };
+                    const yMax = getNiceMax(rawMax);
+                    const yMid = Math.round(yMax / 2);
+
+                    return (
+                      <div className="space-y-3">
+                        {/* Y-Axis Label Header */}
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-semibold px-1">
+                          <span className="flex items-center gap-1 text-slate-700 font-bold">
+                            <span>↑</span>
+                            <span>{lang === 'bn' ? 'বিক্রয় ও আয় (টাকা ৳)' : 'Sales & Revenue (৳ BDT)'}</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {lang === 'bn' ? 'স্কেল: শূন্য থেকে সর্বোচ্চ আয়' : 'Scale: 0 to Peak Earnings'}
+                          </span>
+                        </div>
+
+                        {/* Chart Grid Container (Y-Axis + Plot Area) */}
+                        <div className="flex items-stretch gap-2 sm:gap-3">
+                          
+                          {/* Y-Axis Scale Labels */}
+                          <div className="w-12 sm:w-16 flex flex-col justify-between items-end text-[10px] sm:text-[11px] font-bold text-slate-400 pb-8 select-none shrink-0">
+                            <span className="text-slate-700">৳{yMax.toLocaleString()}</span>
+                            <span>৳{yMid.toLocaleString()}</span>
+                            <span className="text-slate-400">৳0</span>
+                          </div>
+
+                          {/* Main Plot Area (Relative container with grid lines) */}
+                          <div className="flex-1 flex flex-col">
+                            <div className="relative h-48 sm:h-56 w-full border-b-2 border-slate-300">
+                              
+                              {/* Horizontal Grid Lines */}
+                              <div className="absolute inset-0 pointer-events-none flex flex-col justify-between">
+                                <div className="w-full border-t border-dashed border-slate-200" />
+                                <div className="w-full border-t border-dashed border-slate-200" />
+                                <div className="w-full" />
+                              </div>
+
+                              {/* Bars Flex Container */}
+                              <div className="absolute inset-0 flex items-end justify-between gap-1.5 sm:gap-3 px-1 sm:px-2 z-10">
+                                {activeList.map((m, idx) => {
+                                  const rev = m.revenue || 0;
+                                  const isZero = rev === 0;
+                                  const heightPercent = isZero ? 0 : Math.min(100, Math.max(10, Math.round((rev / yMax) * 100)));
+                                  
+                                  return (
+                                    <div
+                                      key={idx}
+                                      className="flex-1 h-full flex flex-col justify-end items-center group cursor-pointer relative"
+                                    >
+                                      {/* Tooltip on hover */}
+                                      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-slate-900 text-white text-[10px] font-bold py-1 px-2.5 rounded-lg shadow-xl text-center pointer-events-none mb-1 whitespace-nowrap z-30 absolute bottom-full">
+                                        <span className="block text-emerald-400 font-black">৳{rev.toLocaleString()}</span>
+                                        <span className="text-slate-300 font-normal">
+                                          {m.orders || 0} {lang === 'bn' ? 'টি অর্ডার' : 'orders'}
+                                        </span>
+                                      </div>
+
+                                      {/* Consistent Header Zone Above Bar */}
+                                      <div className="h-5 flex items-center justify-center mb-1 w-full pointer-events-none">
+                                        {!isZero && (
+                                          <span className="text-[9px] sm:text-[10px] font-extrabold text-emerald-800 truncate max-w-full">
+                                            ৳{rev >= 1000 ? `${(rev/1000).toFixed(1)}k` : rev}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Unified Vertical Bar Track Slot & Animated Bar */}
+                                      <div className="w-full max-w-[32px] sm:max-w-[44px] flex-1 flex flex-col justify-end items-center bg-slate-100/60 rounded-t-xl p-0.5 overflow-hidden">
+                                        <div
+                                          style={{
+                                            height: chartMounted ? (isZero ? '3px' : `${heightPercent}%`) : '3px'
+                                          }}
+                                          className={`w-full rounded-t-lg transition-[height] duration-700 ease-out shadow-xs ${
+                                            isZero
+                                              ? 'bg-slate-300/80'
+                                              : 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 hover:from-emerald-700 hover:to-emerald-500'
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                            </div>
+
+                            {/* X-Axis Day/Date Labels below Base Line */}
+                            <div className="flex items-center justify-between gap-1.5 sm:gap-3 px-1 sm:px-2 pt-2">
+                              {activeList.map((m, idx) => (
+                                <div key={idx} className="flex-1 text-center">
+                                  <span className={`block text-[10px] sm:text-[11px] font-bold truncate ${
+                                    m.isCurrent
+                                      ? 'text-emerald-700 font-black'
+                                      : (m.revenue || 0) === 0
+                                      ? 'text-slate-400 font-medium'
+                                      : 'text-slate-700'
+                                  }`}>
+                                    {lang === 'bn' ? (m.labelBn || m.month) : (m.label || m.month)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* Chart Bottom Legend / Subtitle */}
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 px-1 font-medium border-t border-slate-100">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span>→</span>
+                            <span>
+                              {trendMode === 'daily'
+                                ? (lang === 'bn' ? 'X-অক্ষ: গত ৭ দিনের তারিখ' : 'X-Axis: Past 7 Days')
+                                : (lang === 'bn' ? 'X-অক্ষ: মৌসুমের বিগত ৬ মাস' : 'X-Axis: Past 6 Months')}
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-1.5 text-emerald-700 font-bold">
+                            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                            {trendMode === 'daily'
+                              ? (lang === 'bn' ? '১০ সেপ্টেম্বর (আজকের লাইভ বিক্রয়)' : 'Today 10 Sep (Live)')
+                              : (lang === 'bn' ? 'সেপ্টেম্বর ২০২৬ (চলতি মাস)' : 'Sep 2026 (Current Month)')}
+                          </span>
+                        </div>
+
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Column 2: Top Performing Crops Leaderboard (5 cols) */}
+              <div className="lg:col-span-5 bg-slate-50/60 border border-slate-200/80 rounded-3xl p-6 sm:p-7 space-y-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+                    <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                      <Award className="w-4 h-4 text-amber-500" />
+                      <span>{t('topSellingCropsTitle')}</span>
+                      {(insights.topProducts?.length || 0) > 0 && (
+                        <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {insights.topProducts.length}
+                        </span>
+                      )}
+                    </h3>
+                    <span className="text-[11px] text-slate-500 font-medium">
+                      {lang === 'bn' ? 'রাজস্ব অনুযায়ী' : 'By Revenue'}
+                    </span>
+                  </div>
+
+                  {/* Leaderboard List (Scrollable for 5 to 30+ items) */}
+                  <div className="max-h-[300px] sm:max-h-[340px] overflow-y-auto pr-1.5 space-y-3.5 pt-3 focus:outline-none">
+                    {(insights.topProducts && insights.topProducts.length > 0) ? (
+                      insights.topProducts.map((crop, idx) => (
+                        <div key={crop.productId || idx} className="space-y-1.5 pt-1 first:pt-0">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center font-black text-[10px] shrink-0 ${
+                                idx === 0
+                                  ? 'bg-amber-400 text-amber-950 shadow-xs'
+                                  : idx === 1
+                                  ? 'bg-slate-200 text-slate-800'
+                                  : idx === 2
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200'
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              <span className="font-bold text-slate-800 truncate" title={crop.title}>
+                                {crop.title}
+                              </span>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="font-black text-emerald-700">৳{crop.revenue.toLocaleString()}</span>
+                              <span className="text-[10px] text-slate-500 block">
+                                {crop.quantitySold} {crop.unit}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress Bar showing Revenue Share */}
+                          <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
+                            <div
+                              style={{ width: `${Math.max(8, crop.revenueShare)}%` }}
+                              className={`h-full rounded-full ${
+                                idx === 0
+                                  ? 'bg-emerald-600'
+                                  : idx === 1
+                                  ? 'bg-teal-500'
+                                  : idx === 2
+                                  ? 'bg-emerald-400'
+                                  : 'bg-slate-400'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-slate-400 text-xs">
+                        <Package className="w-8 h-8 mx-auto text-slate-300 mb-1" />
+                        <p>{lang === 'bn' ? 'এখনো কোনো ফসল বিক্রি হয়নি' : 'No sales recorded yet'}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>
+                    {(insights.topProducts?.length || 0) > 4
+                      ? (lang === 'bn' ? 'সকল ফসল দেখতে স্ক্রোল করুন' : 'Scroll to view all items')
+                      : (lang === 'bn' ? 'শীর্ষ ফসল মোট বিক্রয়ের অধিকাংশ ভূমিকা রাখে' : 'Top produce accounts for core revenue')}
+                  </span>
+                  <Link to="/seller/inventory" className="text-emerald-700 hover:text-emerald-800 font-bold">
+                    {lang === 'bn' ? 'ইনভেন্টরি ➔' : 'Inventory ➔'}
+                  </Link>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Bottom Dual Sub-Cards: Fulfillment Channel Split & Dynamic Pricing Impact */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+              {/* Sub-Card A: Delivery Channels */}
+              <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
+                    <Truck className="w-4 h-4 text-emerald-600" />
+                    <span>{t('fulfillmentChannelsTitle')}</span>
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    {lang === 'bn'
+                      ? `${insights.fulfillment?.deliveryPercent || 0}% হোম কুরিয়ার ডেলিভারি বনাম ${insights.fulfillment?.pickupPercent || 0}% সরাসরি খামার গেট সংগ্রহ`
+                      : `${insights.fulfillment?.deliveryPercent || 0}% Courier Delivery vs ${insights.fulfillment?.pickupPercent || 0}% Farm Gate Direct Pickup`}
+                  </p>
+                </div>
+                
+                {/* Visual Dual-Color Channel Bar */}
+                <div className="w-full sm:w-44 space-y-1 shrink-0">
+                  <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden flex">
+                    <div
+                      style={{ width: `${insights.fulfillment?.deliveryPercent || 50}%` }}
+                      className="bg-emerald-500 h-full"
+                      title="Courier Delivery"
+                    />
+                    <div
+                      style={{ width: `${insights.fulfillment?.pickupPercent || 50}%` }}
+                      className="bg-purple-500 h-full"
+                      title="Farm Gate Pickup"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-emerald-700 font-bold">{t('homeCourierLabel')}</span>
+                    <span className="text-purple-700 font-bold">{t('farmGatePickupLabel')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-Card B: Dynamic Aging Pricing ROI */}
+              <div className="p-5 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 flex items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900">
+                    <Sprout className="w-4 h-4 text-emerald-600" />
+                    <span>{t('agingSavingsTitle')}</span>
+                  </div>
+                  <p className="text-xs text-emerald-800">
+                    {lang === 'bn'
+                      ? `স্বয়ংক্রিয় মূল্যহ্রাসে মোট ৳${(insights.spoilageSavedBdt || 0).toLocaleString()} মূল্যের ফসল অপচয় রোধ করে বিক্রি করা হয়েছে।`
+                      : `Recovered ৳${(insights.spoilageSavedBdt || 0).toLocaleString()} revenue by accelerating sales before harvest expiration.`}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span className="inline-block px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold">
+                    100% {lang === 'bn' ? 'ফ্লোর প্রটেকশন' : 'Floor Protected'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           {/* MAIN DASHBOARD CONTENT (2 COLUMNS: RECENT ORDERS & URGENT ALERTS) */}

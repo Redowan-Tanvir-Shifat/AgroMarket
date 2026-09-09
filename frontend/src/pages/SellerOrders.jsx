@@ -426,33 +426,6 @@ export default function SellerOrders() {
         </div>
       </div>
 
-      {/* Demo Seller Profile Switcher */}
-      <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2 text-slate-600 font-semibold">
-          <Building2 className="w-4 h-4 text-emerald-600" />
-          <span>{lang === 'bn' ? 'খামার নির্বাচন (Demo Switcher):' : 'Active Farm View:'}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: 1, name: 'রাজশাহী আম হাব (রফিকুল)' },
-            { id: 2, name: 'দিনাজপুর লিচু ও চাল (তারিকুল)' },
-            { id: 3, name: 'বগুড়া সবজি ভান্ডার (কালাম)' }
-          ].map((demo) => (
-            <button
-              key={demo.id}
-              onClick={() => setSelectedSellerId(demo.id)}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-                selectedSellerId === demo.id
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
-              }`}
-            >
-              {demo.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* KPI Metrics Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-xs space-y-1">

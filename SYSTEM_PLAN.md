@@ -2,9 +2,9 @@
 
 > **Project Name:** AgroMarket — Farm-Fresh, Direct to You (বাংলাদেশের কৃষকের সরাসরি বাজার)  
 > **Target Market:** Bangladesh Agriculture Ecosystem (বাংলাদেশ প্রেক্ষাপট)  
-> **Tech Stack:** React.js, Node.js, Express.js, Tailwind CSS, MySQL  
+> **Tech Stack:** React.js, Node.js, Express.js, Socket.io, Cloudinary, Tailwind CSS, MySQL  
 > **Theme:** Clean, Modern, Eco-Green & Crisp White (#16a34a / #22c55e / #ffffff)  
-> **Architecture Pattern:** MVC REST API (Node/Express) + Component-Driven SPA (React)
+> **Architecture Pattern:** Hybrid Real-Time (Socket.io) + MVC REST API (Node/Express) + Component-Driven SPA (React)
 
 ---
 
@@ -107,30 +107,37 @@ The application strictly enforces Role-Based Access Control (RBAC) via JWT middl
 
 ## 4. Page Architecture & User Navigation Map
 
-The web application consists of **12 main pages**, organized cleanly by layout and access control.
+The web application consists of **15 structured pages** and **2 global real-time widgets**, organized cleanly by layout and role-based access control.
 
 ```
-📁 AgroMarket Web Application Pages
+📁 AgroMarket Web Application Architecture
 │
 ├── 🌐 PUBLIC PAGES
 │   ├── 1. Home / Landing Page (`/`) — Featuring BD Seasons & Top Farm Divisions
 │   ├── 2. Marketplace Catalog (`/products`) — Filters for Category, District, Freshness
-│   ├── 3. Product Details Page (`/products/:id`) — Harvest Date, BDT Dynamic Pricing, Reviews
-│   ├── 4. Seller Storefront Page (`/storefront/:sellerId`) — Farmer Profile & Farm Verification
+│   ├── 3. Product Details Page (`/products/:id`) — Harvest Date, BDT Dynamic Pricing, Reviews, Chat Trigger
+│   ├── 4. Seller Storefront Page (`/storefront/:sellerId`) — Farmer Profile, Farm Verification, Direct Message
 │   └── 5. Authentication Page (`/login`, `/register`) — Buyer vs. Farmer Portal Sign Up
 │
 ├── 🛒 BUYER PAGES (Protected: Role = Buyer)
-│   ├── 6. Cart & Checkout Page (`/checkout`) — Delivery vs Pickup + bKash/Nagad/COD
-│   ├── 7. Buyer Dashboard & Order History (`/account/orders`) — 1-Click Reorder
-│   └── 8. Wishlist & Favorite Items (`/account/wishlist`)
+│   ├── 6. Cart & Checkout Page (`/checkout`) — Delivery vs Pickup + bKash/Nagad/Rocket/COD
+│   ├── 7. Buyer Dashboard & Order History (`/account/orders`) — Live Status Stepper & 1-Click Reorder
+│   └── 8. Wishlist & Produce Tracker (`/account/wishlist`) — Live Price Drop Tracker
 │
-├── 🚜 FARMER PAGES (Protected: Role = Seller)
-│   ├── 9. Seller Dashboard & Earnings (`/seller/dashboard`) — Total Revenue ৳ & Low Stock Alerts
-│   ├── 10. Inventory Management / Add Crop (`/seller/inventory`) — Harvest date, Mon/Kg stock
-│   └── 11. Seller Order Fulfillment (`/seller/orders`) — Manage Pickup & Courier Dispatches
+├── 🚜 FARMER / SELLER PAGES (Protected: Role = Seller)
+│   ├── 9. Seller Dashboard & Analytics (`/seller/dashboard`) — Live Revenue ৳, Sales Bar Plot, Spoilage Prevented
+│   ├── 10. Inventory Management (`/seller/inventory`) — Harvest date, Mon/Kg stock, Floor price
+│   ├── 11. Add / Edit Crop Listing (`/seller/products/new`, `/seller/products/:id/edit`)
+│   ├── 12. Seller Order Fulfillment (`/seller/orders`) — Cash Collection, Printable A4 Challan Invoices
+│   ├── 13. Farm Profile & Settings Hub (`/seller/profile`) — Verified Badge, bKash Payouts, Geo-location
+│   └── 14. Farmer Inquiries & Chat Inbox (`/seller/messages`) — Real-time buyer conversation manager
 │
-└── 👑 ADMIN PAGES (Protected: Role = Admin)
-    └── 12. Admin Master Overview (`/admin/dashboard`) — National Sales GMV ৳ & Expired Audit Log
+├── 👑 ADMIN PAGES (Protected: Role = Admin)
+│   └── 15. Admin Master Center (`/admin/dashboard`) — National GMV ৳, Supply Analytics, Verification & Audit Log
+│
+└── ⚡ CROSS-PLATFORM REAL-TIME WIDGETS (Global Socket.io)
+    ├── 🔔 Notification Bell Center (Navbar) — Real-time unread badge, synthesized audio chime, toast alerts
+    └── 💬 Floating Buyer ↔ Farmer Chat Widget — Messenger-style instant messaging on produce & storefront pages
 ```
 
 ---
@@ -248,24 +255,56 @@ Multi-role tab toggle at top: `🛒 Buyer Account (ক্রেতা অ্য�
   * **Low-Stock Alert Widget (কম স্টকের সতর্কবার্তা):** Highlighted banner alerting seller when crop quantity drops below threshold (e.g., $< 5$ Mon remaining).
   * **Active Listings Counter:** Breakdown of Fresh, Aging, and Expired produce.
 
-### 10. Inventory Management / Add Crop (`/seller/inventory`)
-* **Purpose:** Create, edit, and monitor crop listings.
+### 10. Inventory Management (`/seller/inventory`)
+* **Purpose:** Farmer central hub to monitor stock, units (`kg`, `mon`), floor prices, and dynamic decay states.
 * **Features Covered:**
-  * Form fields: Crop Title, Category, Base Price (৳ per kg/mon), Initial Stock Quantity, Unit Selection (`kg`, `mon`, `piece`, `dozen`), Low-Stock Alert Threshold, Harvest Date (datetime picker), Maximum Shelf Life (in days), Minimum Floor Price (৳), Produce Images, Description.
-  * Automated Status Badge: Active, Low Stock, Aging Discount Applied, Expired.
+  * Search, category filtering, and status tabs (All, Active, Low Stock, Expired).
+  * Quick stock adjuster, harvest age display, and soft-delete toggle.
 
-### 11. Seller Order Fulfillment (`/seller/orders`)
-* **Purpose:** Manage incoming orders from buyers.
+### 11. Add / Edit Crop Listing (`/seller/products/new`, `/seller/products/:id/edit`)
+* **Purpose:** Create and edit produce listings with agricultural parameters.
 * **Features Covered:**
-  * List of incoming orders categorized by Fulfillment Type (Delivery vs. Pickup).
-  * Action buttons: "Mark Ready for Pickup", "Dispatched for Courier", "Delivered".
+  * Bilingual crop naming, category select, base price (৳), minimum floor price (৳), stock quantity, and unit selector (`kg`, `mon`, `piece`, `dozen`, `liter`).
+  * Precise harvest datetime picker and maximum shelf-life days configuration.
 
-### 12. Admin Master Overview (`/admin/dashboard`)
-* **Purpose:** Platform-wide metrics and system moderation.
+### 12. Seller Order Fulfillment (`/seller/orders`)
+* **Purpose:** Manage dispatch pipeline, cash-on-delivery collection, and transport documentation.
 * **Features Covered:**
-  * **Platform-Wide Sales Metrics:** Total GMV in BDT (৳), Active Farmers Count, Total Buyers Count.
-  * **Top-Performing Sellers Table:** Leaderboard of farmers ranked by revenue (৳), average rating, and order volume.
-  * **Expired Produce Monitor:** Audit table showing automatically expired produce removed from catalog.
+  * Filter orders by status (All, Pending, Confirmed, Shipped, Delivered, Cancelled).
+  * Step-by-step fulfillment status stepper (`Processing` → `Confirmed` → `Shipped` → `Delivered`).
+  * Instant Cash on Delivery (COD) collection toggle with auto-delivery confirmation.
+  * Printable standard A4 Delivery Challan / Invoice modal with bilingual breakdown, farm logo, and tax/fee separation.
+
+### 13. Farm Profile & Settings Hub (`/seller/profile`)
+* **Purpose:** Manage farm identity, geo-location, credentials, and digital payout options.
+* **Features Covered:**
+  * Dark-emerald verified partner overview banner with average ratings and farmer contact badges.
+  * Bio & agricultural specialty description.
+  * Verified Farmer badge verification status (`যাচাইকৃত কৃষক`) with NID/Trade License upload.
+  * Mobile financial services disbursement configuration (`bKash`, `Nagad`, `Rocket`, `Bank`).
+
+### 14. Farmer Live Inquiries & Chat Hub (`/seller/messages`)
+* **Purpose:** Centralized real-time conversation inbox for farmers to manage inquiries from prospective buyers.
+* **Features Covered:**
+  * Sidebar conversation list with active buyer names, last messages, timestamps, and unread counters.
+  * Real-time chat stream with product attachment preview, instant replies, and typing indicators.
+
+### 15. Admin Master Center (`/admin/dashboard`)
+* **Purpose:** Platform-wide oversight, national agricultural analytics, and dispute moderation.
+* **Features Covered:**
+  * **Platform-Wide Metrics:** National GMV (৳), platform fee revenues, total orders, active farmers & buyers.
+  * **District & Division Agricultural Supply Analytics:** Visual produce distribution across Bangladesh divisions.
+  * **Farmer Verification & Quality Moderation:** Review pending farmer profiles, inspect NID/Trade licenses, and grant/revoke Verified Badges (`যাচাইকৃত কৃষক`).
+  * **Expired Produce & Waste Prevention Audit Log:** Audit log of crops saved from spoilage vs. expired items.
+  * **Dispute & Refund Resolution:** Manage flagged orders or delivery discrepancies.
+
+### ⚡ Cross-Platform Real-Time Modules
+* **🔔 Live Notification Center (Navbar):**
+  * Socket.io powered push notifications with synthesized Web Audio chimes (no external sound files required).
+  * Unread counter badges, dropdown notification drawer, time-ago relative timestamps, and one-click navigation.
+* **💬 Floating Buyer ↔ Farmer Chat Widget:**
+  * Messenger-style dock expandable from bottom right on Product Details and Storefront pages.
+  * Instant WebSocket push delivery (`socket.emit('send_message')`), bidirectional live conversation without page reload.
 
 ---
 
@@ -410,6 +449,38 @@ erDiagram
         int product_id FK
         timestamp created_at
     }
+
+    NOTIFICATIONS {
+        int id PK
+        int user_id FK
+        string type "ORDER, STATUS, REVIEW, STOCK, CHAT"
+        string title
+        string title_bn
+        text message
+        text message_bn
+        string link
+        boolean is_read
+        timestamp created_at
+    }
+
+    CONVERSATIONS {
+        int id PK
+        int buyer_id FK
+        int seller_id FK
+        int product_id FK
+        timestamp last_message_at
+        timestamp created_at
+    }
+
+    MESSAGES {
+        int id PK
+        int conversation_id FK
+        int sender_id FK
+        enum sender_role "buyer, seller"
+        text content
+        boolean is_read
+        timestamp created_at
+    }
 ```
 
 ### Key SQL Implementation Scripts
@@ -507,6 +578,47 @@ SELECT
 FROM products p
 JOIN sellers s ON p.seller_id = s.id
 JOIN categories c ON p.category_id = c.id;
+
+-- Notifications Table
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(150) NOT NULL,
+    title_bn VARCHAR(150),
+    message TEXT NOT NULL,
+    message_bn TEXT,
+    link VARCHAR(255),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Chat Conversations Table
+CREATE TABLE conversations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    buyer_id INT NOT NULL,
+    seller_id INT NOT NULL,
+    product_id INT NULL,
+    last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- Chat Messages Table
+CREATE TABLE messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    conversation_id INT NOT NULL,
+    sender_id INT NOT NULL,
+    sender_role ENUM('buyer', 'seller') NOT NULL,
+    content TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
 ```
 
 ---
@@ -549,10 +661,39 @@ JOIN categories c ON p.category_id = c.id;
 * `GET /api/seller/dashboard` *(Seller only)* — Total earnings in ৳, sales volume, and low-stock alert warnings list.
 
 #### 👑 Admin Master Routes (`/api/admin`)
-* `GET /api/admin/metrics` *(Admin only)* — National GMV sales total in ৳, commission fees, active buyer & seller counts.
+* `GET /api/admin/metrics` *(Admin only)* — National GMV sales total in ৳, platform commission fees, active buyer & seller counts.
 * `GET /api/admin/top-sellers` *(Admin only)* — Leaderboard of top-performing farmers ranked by sales & ratings.
+* `GET /api/admin/supply-analytics` *(Admin only)* — Agricultural volume breakdown by Bangladesh divisions & districts.
 * `GET /api/admin/expired-produce` *(Admin only)* — Audit list of automatically expired produce.
+* `PATCH /api/admin/farmers/:id/verify` *(Admin only)* — Toggle verified farmer badge (`যাচাইকৃত কৃষক`) after NID/Trade license audit.
 
+#### 🔔 Notification Routes (`/api/notifications`)
+* `GET /api/notifications` *(Authenticated)* — Fetch current user's notifications sorted newest first.
+* `PATCH /api/notifications/:id/read` *(Authenticated)* — Mark a specific notification as read.
+* `PATCH /api/notifications/read-all` *(Authenticated)* — Mark all notifications as read for the user.
+
+#### 💬 Chat & Messaging Routes (`/api/chat`)
+* `POST /api/chat/start` *(Buyer only)* — Start or get existing conversation with a farmer for a specific product.
+* `GET /api/chat/conversations` *(Authenticated)* — Fetch list of conversations for current buyer or farmer with unread count.
+* `GET /api/chat/messages/:conversationId` *(Authenticated)* — Fetch message history for a conversation.
+* `POST /api/chat/messages` *(Authenticated)* — Post new message (persists to MySQL + broadcasts to conversation socket room).
+
+#### ☁️ Cloudinary Media Upload Routes (`/api/upload`)
+* `POST /api/upload/produce-image` *(Seller only)* — Handles multipart image upload (via Multer), streams to Cloudinary folder `agromarket/produce`, generates optimized WebP thumbnail, and returns secure CDN URL (`secure_url`).
+* `POST /api/upload/farm-banner` *(Seller only)* — Uploads farm cover banner and avatar to Cloudinary folder `agromarket/farms`.
+* `POST /api/upload/review-photo` *(Buyer only)* — Uploads optional buyer review photo attachment to `agromarket/reviews`.
+
+#### ⚡ Socket.io Real-Time Protocol Specifications
+* **Connection Handshake:** Client connects with `auth: { token: JWT }` or `userId`. Joins personal room `user_${userId}` and `seller_${sellerId}` (if farmer).
+* **Server-Emitted Events:**
+  * `notification:new` — Emits `{ id, type, title, title_bn, message, message_bn, link, created_at }` directly to recipient room.
+  * `order:created` — Emitted to `seller_${sellerId}` when a buyer checks out.
+  * `order:status_updated` — Emitted to `user_${buyerId}` when farmer updates order status.
+  * `chat:message_received` — Emitted to `conversation_${conversationId}` with full message payload.
+* **Client-Emitted Events:**
+  * `chat:join` — Joins `conversation_${conversationId}` room.
+  * `chat:typing` — Emits typing status to other participant.
+  * `chat:leave` — Leaves conversation room.
 
 ---
 
@@ -576,13 +717,77 @@ JOIN categories c ON p.category_id = c.id;
 
 ```mermaid
 timeline
-    title AgroMarket Bangladesh Development Roadmap
-    Phase 1 : Bangladesh DB Schema & Seed Data : Create MySQL tables & v_active_products view : Seed BD categories (চাল, আম, সবজি) & 64 Districts
-    Phase 2 : Express REST API & Aging Logic : Dynamic BDT pricing formula : bKash/Nagad checkout logic : Hourly node-cron expiry job
-    Phase 3 : React Frontend & Theme : Eco-Green theme setup : English/Bangla language context : Division & District dropdown components
-    Phase 4 : Feature Pages Implementation : Catalog with BDT sorting : Buyer Checkout (Delivery vs Farm Pickup) : Farmer Dashboard & Low Stock Alerts : Admin Leaderboard
-    Phase 5 : Testing & Validation : Dynamic Price Aging simulation test : Responsive Mobile & Tablet testing : Production readiness
+    title AgroMarket Bangladesh 5-Day Execution Roadmap
+    Day 1 (Completed) : Foundation & Public Portal : MySQL Schema & Seed Data : Catalog with 64 District Filters : Multi-role Auth & Bilingual i18n
+    Day 2 (Completed) : Buyer Commerce & Experience : Dynamic Produce Aging Engine : Checkout (bKash/Nagad/Rocket/COD) : Buyer Orders & Reviews
+    Day 3 (Completed) : Farmer Ecosystem : Seller Dashboard & Real DB Bar Chart : Inventory & Add/Edit Crop : Order Fulfillment & A4 Challans : Farm Profile Hub
+    Day 4 (Next Up) : Real-Time Engine & Admin : Socket.io Bidirectional Server : Live Notification Center & Audio Chimes : Buyer-Farmer Live Chat : Admin Master Center
+    Day 5 (Final) : Logistics & Handover : Delivery Driver & Courier Portal : Advanced Search Filters : End-to-End Verification & Hardening
 ```
+
+### Detailed Daily Breakdown
+
+#### ✅ Day 1: Foundation, Catalog & Authentication (Completed)
+* Home Landing Page with dynamic aging deals carousel and Bangladesh seasonality.
+* Catalog grid with category chips, division & district filters, price & freshness sorting.
+* Multi-role authentication (Buyer, Farmer, Admin) with secure validation.
+* Full English & Bangla localization (`LanguageContext`).
+
+#### ✅ Day 2: Buyer Commerce, Transactions & Reviews (Completed)
+* Product Details page with dynamic decay aging meter and time-ago formatting.
+* Seller Storefront profile with verified farmer badge and listed produce.
+* Cart & Checkout with Home Delivery vs. Farm Pickup, and bKash/Nagad/Rocket/COD payment simulation.
+* Buyer Dashboard with order tracking stepper and 1-click reorder.
+* Customer reviews submission and Wishlist price-drop tracker.
+
+#### ✅ Day 3: Farmer / Seller Ecosystem & Fulfillment (Completed)
+* Seller Dashboard with real database-driven revenue, sales bar chart (Daily vs. Monthly), and scrollable Leaderboard.
+* Inventory Management and Add/Edit Crop listing forms with shelf-life and floor prices.
+* Seller Order Fulfillment with Cash on Delivery (COD) payment collection and soft-delete capabilities.
+* Printable standard A4 Delivery Challan / Invoice modal.
+* Farm Profile & Settings Hub with dark-emerald verified partner overview.
+
+#### 🚀 Day 4: Real-Time Engine, Live Notifications, Buyer-Farmer Chat, Cloudinary & Admin Center (Planned)
+1. **Real-Time WebSocket Core (`Socket.io`)**:
+   * Install `socket.io` (backend) & `socket.io-client` (frontend).
+   * Connection management, user/seller room subscriptions, and auto-reconnect.
+2. **Global Notification Center (Both Buyer & Farmer)**:
+   * MySQL `notifications` table with read/unread tracking.
+   * Header bell icon with real-time badge count (`🔴`).
+   * Synthesized Web Audio API bell chime on arrival (pure code, zero external asset dependencies).
+   * Notification slide-out tray with time-ago formatting and direct links.
+   * Auto-triggers on Order Placement, Status Change, and Reviews.
+3. **Buyer ↔ Farmer Direct Live Chat**:
+   * MySQL `conversations` and `messages` tables.
+   * *"Chat with Farmer"* trigger on Product Details and Storefront pages.
+   * Messenger-style floating collapsible chat dock.
+   * Dedicated Seller Inquiries & Chat Hub (`/seller/messages`).
+   * Live message stream with instant socket push and typing indicator.
+4. **Cloudinary Media & Image Upload Engine (`cloudinary` + `multer`)**:
+   * Backend Cloudinary integration (`/api/upload/produce-image`, `/api/upload/farm-banner`).
+   * Drag-and-drop crop photo uploader in Add/Edit Crop form (`/seller/products/new`, `/seller/products/:id/edit`) with live preview, upload progress, and automatic WebP compression.
+   * Farm cover banner and verification document upload in Farm Profile (`/seller/profile`).
+   * Graceful fallback: handles preset selections and fallback URLs if Cloudinary API keys are not supplied.
+5. **Admin Master Center (`/admin/dashboard`)**:
+   * National GMV (৳), platform fee commission, active user metrics.
+   * District & Division Agricultural Supply Analytics visualization.
+   * Farmer Verification & Quality Moderation Hub (NID & Trade license audit).
+   * Automated Expired Produce Audit Log and Dispute Resolution.
+
+#### 🎯 Day 5: Delivery Driver Portal, Polish, End-to-End Testing & Handover (Planned)
+1. **Logistics & Delivery Driver Hub (`/driver`)**:
+   * Courier/driver dispatch list across districts.
+   * Pickup confirmation from farm and delivery handover with COD collection check.
+2. **Advanced Catalog Search & Discovery Refinement**:
+   * Multi-district and price-range sliders, active freshness filter chips.
+   * Dynamic price decay live updates across active browser tabs without reload.
+3. **Comprehensive End-to-End System Testing**:
+   * Full multi-role simulation: Farmer lists crop -> Buyer chats -> Buyer orders -> Farmer chimes & dispatches -> Driver delivers -> Buyer reviews.
+   * Rigorous validation of security, input sanitization, and responsive styling.
+4. **Final Documentation & Summaries**:
+   * Compile `work_days/Day_4_Summary.md` and `work_days/Day_5_Summary.md`.
+   * Final production build check (`npm run build`).
 
 ---
 *Tailored specifically for Bangladesh Agriculture Ecosystem.*
+

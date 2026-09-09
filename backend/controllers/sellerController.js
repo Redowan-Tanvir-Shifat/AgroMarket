@@ -23,7 +23,14 @@ const resolveSellerId = async (req) => {
     const [sellers] = await pool.query('SELECT id FROM sellers WHERE user_id = ?', [req.user.id]);
     if (sellers.length > 0) return sellers[0].id;
   }
-  if (req.query?.sellerId) return parseInt(req.query.sellerId);
+  if (req.query?.sellerId) {
+    const parsed = parseInt(req.query.sellerId);
+    if (!isNaN(parsed)) return parsed;
+  }
+  if (req.body?.sellerId) {
+    const parsed = parseInt(req.body.sellerId);
+    if (!isNaN(parsed)) return parsed;
+  }
   return 1; // Default to main demo farmer (Rajshahi Mango Hub)
 };
 
@@ -159,6 +166,148 @@ export const getSellerDashboardStats = async (req, res) => {
       [sellerId]
     );
 
+    // 7. Business Insights: Top Performing Produce
+    const [topProductsRes] = await pool.query(
+      `SELECT oi.product_id, p.title, p.title_bn, p.image_url, p.unit,
+              SUM(oi.quantity) as total_quantity_sold,
+              SUM(oi.subtotal_bdt) as total_revenue
+       FROM order_items oi
+       JOIN products p ON oi.product_id = p.id
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0
+       GROUP BY oi.product_id
+       ORDER BY total_revenue DESC
+       LIMIT 50`,
+      [sellerId]
+    );
+
+    // 8. Business Insights: Fulfillment Channel Split (Delivery vs Pickup)
+    const [fulfillmentRes] = await pool.query(
+      `SELECT o.fulfillment_type,
+              COUNT(DISTINCT o.id) as order_count,
+              COALESCE(SUM(oi.subtotal_bdt), 0) as total_revenue
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0
+       GROUP BY o.fulfillment_type`,
+      [sellerId]
+    );
+
+    let deliveryCount = 0;
+    let deliveryRevenue = 0;
+    let pickupCount = 0;
+    let pickupRevenue = 0;
+
+    fulfillmentRes.forEach(f => {
+      if (f.fulfillment_type === 'DELIVERY') {
+        deliveryCount = parseInt(f.order_count || 0);
+        deliveryRevenue = parseFloat(f.total_revenue || 0);
+      } else if (f.fulfillment_type === 'PICKUP') {
+        pickupCount = parseInt(f.order_count || 0);
+        pickupRevenue = parseFloat(f.total_revenue || 0);
+      }
+    });
+
+    const totalFulfillmentOrders = deliveryCount + pickupCount;
+    const deliveryPercent = totalFulfillmentOrders > 0 ? Math.round((deliveryCount / totalFulfillmentOrders) * 100) : 65;
+    const pickupPercent = totalFulfillmentOrders > 0 ? 100 - deliveryPercent : 35;
+
+    // 9. Business Insights: Unique Buyers & Repeat Rate
+    const [buyersRes] = await pool.query(
+      `SELECT COUNT(DISTINCT o.buyer_id) as unique_buyers
+       FROM orders o
+       JOIN order_items oi ON o.id = oi.order_id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0`,
+      [sellerId]
+    );
+    const uniqueBuyers = parseInt(buyersRes[0]?.unique_buyers || 0);
+    const repeatCustomers = Math.max(0, totalOrders - uniqueBuyers);
+    const repeatRate = totalOrders > 0 ? Math.min(100, Math.round((repeatCustomers / totalOrders) * 100)) : 0;
+    const avgOrderValue = totalOrders > 0 ? Math.round(totalEarnings / totalOrders) : 0;
+
+    // 10. Business Insights: Real Spoilage Prevented & Revenue Recovered via Dynamic Price Decay
+    const [decayRes] = await pool.query(
+      `SELECT 
+         COALESCE(SUM(CASE WHEN oi.unit_price_at_purchase_bdt < p.base_price_bdt AND oi.unit_price_at_purchase_bdt > 0 THEN oi.quantity ELSE 0 END), 0) as real_decay_saved_kg,
+         COALESCE(SUM(CASE WHEN oi.unit_price_at_purchase_bdt < p.base_price_bdt AND oi.unit_price_at_purchase_bdt > 0 THEN oi.subtotal_bdt ELSE 0 END), 0) as real_decay_saved_bdt
+       FROM order_items oi
+       JOIN products p ON oi.product_id = p.id
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0`,
+      [sellerId]
+    );
+    const decaySavedKg = parseInt(decayRes[0]?.real_decay_saved_kg || 0);
+    const decaySavedBdt = Math.round(parseFloat(decayRes[0]?.real_decay_saved_bdt || 0));
+
+    // 11. Business Insights: Real Monthly Sales Revenue Trend (Last 6 Months from Database)
+    const [monthlyDbRes] = await pool.query(
+      `SELECT 
+         DATE_FORMAT(o.created_at, '%Y-%m') as ym,
+         COALESCE(SUM(oi.subtotal_bdt), 0) as month_revenue,
+         COUNT(DISTINCT o.id) as month_orders
+       FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0
+       GROUP BY DATE_FORMAT(o.created_at, '%Y-%m')`,
+      [sellerId]
+    );
+
+    const monthMap = {};
+    monthlyDbRes.forEach(r => {
+      monthMap[r.ym] = {
+        revenue: Math.round(parseFloat(r.month_revenue || 0)),
+        orders: parseInt(r.month_orders || 0)
+      };
+    });
+
+    const monthlyTrends = [
+      { ym: '2026-04', month: 'Apr', labelBn: 'এপ্রিল' },
+      { ym: '2026-05', month: 'May', labelBn: 'মে' },
+      { ym: '2026-06', month: 'Jun', labelBn: 'জুন' },
+      { ym: '2026-07', month: 'Jul', labelBn: 'জুলাই' },
+      { ym: '2026-08', month: 'Aug', labelBn: 'আগস্ট' },
+      { ym: '2026-09', month: 'Sep', labelBn: 'সেপ্টেম্বর', isCurrent: true }
+    ].map(m => ({
+      ...m,
+      revenue: monthMap[m.ym]?.revenue || 0,
+      orders: monthMap[m.ym]?.orders || 0
+    }));
+
+    // 12. Business Insights: Real Daily Sales (Last 7 Days)
+    const [dailyDbRes] = await pool.query(
+      `SELECT 
+         DATE_FORMAT(o.created_at, '%Y-%m-%d') as order_date,
+         COALESCE(SUM(oi.subtotal_bdt), 0) as day_revenue,
+         COUNT(DISTINCT o.id) as day_orders
+       FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0
+       GROUP BY DATE_FORMAT(o.created_at, '%Y-%m-%d')`,
+      [sellerId]
+    );
+
+    const dayMap = {};
+    dailyDbRes.forEach(r => {
+      dayMap[r.order_date] = {
+        revenue: Math.round(parseFloat(r.day_revenue || 0)),
+        orders: parseInt(r.day_orders || 0)
+      };
+    });
+
+    const dailyTrends = [
+      { date: '2026-09-04', label: '04 Sep', labelBn: '০৪ সেপ' },
+      { date: '2026-09-05', label: '05 Sep', labelBn: '০৫ সেপ' },
+      { date: '2026-09-06', label: '06 Sep', labelBn: '০৬ সেপ' },
+      { date: '2026-09-07', label: '07 Sep', labelBn: '০৭ সেপ' },
+      { date: '2026-09-08', label: '08 Sep', labelBn: '০৮ সেপ' },
+      { date: '2026-09-09', label: '09 Sep', labelBn: '০৯ সেপ' },
+      { date: '2026-09-10', label: '10 Sep', labelBn: '১০ সেপ', isCurrent: true }
+    ].map(d => ({
+      ...d,
+      revenue: dayMap[d.date]?.revenue || 0,
+      orders: dayMap[d.date]?.orders || 0
+    }));
+
     return res.json({
       seller,
       kpis: {
@@ -171,7 +320,34 @@ export const getSellerDashboardStats = async (req, res) => {
         expiredCrops: parseInt(cropStats.expired_crops || 0),
         ratingAvg: parseFloat(seller.rating_avg) || 4.9,
         totalRatings: seller.total_ratings || 0,
-        estimatedWasteSavedKg: Math.round(totalEarnings * 0.18) // Simulated metric for spoilage waste prevented
+        estimatedWasteSavedKg: decaySavedKg
+      },
+      insights: {
+        avgOrderValue,
+        uniqueBuyers,
+        repeatCustomers,
+        repeatRate,
+        fulfillment: {
+          deliveryCount,
+          deliveryRevenue,
+          deliveryPercent,
+          pickupCount,
+          pickupRevenue,
+          pickupPercent
+        },
+        topProducts: topProductsRes.map(p => ({
+          productId: p.product_id,
+          title: p.title,
+          titleBn: p.title_bn,
+          imageUrl: p.image_url,
+          unit: p.unit,
+          quantitySold: parseFloat(p.total_quantity_sold || 0),
+          revenue: parseFloat(p.total_revenue || 0),
+          revenueShare: totalEarnings > 0 ? Math.min(100, Math.round((parseFloat(p.total_revenue || 0) / totalEarnings) * 100)) : 0
+        })),
+        monthlyTrends,
+        dailyTrends,
+        spoilageSavedBdt: decaySavedBdt
       },
       recentOrders,
       urgentAlerts
@@ -571,7 +747,10 @@ export const updateSellerProfile = async (req, res) => {
       bio,
       nid_trade_license,
       payout_method,
-      payout_number
+      payout_number,
+      full_name,
+      phone,
+      address
     } = req.body;
 
     await pool.query(
@@ -598,8 +777,37 @@ export const updateSellerProfile = async (req, res) => {
       ]
     );
 
-    return res.json({ message: 'খামারের প্রোফাইল ও পেমেন্ট তথ্য সফলভাবে সংরক্ষিত হয়েছে (Profile saved)' });
+    // Also update farmer user details if provided
+    if (full_name || phone || address) {
+      const [sellers] = await pool.query('SELECT user_id FROM sellers WHERE id = ?', [sellerId]);
+      if (sellers.length > 0 && sellers[0].user_id) {
+        await pool.query(
+          `UPDATE users SET
+            full_name = COALESCE(?, full_name),
+            phone = COALESCE(?, phone),
+            address = COALESCE(?, address)
+           WHERE id = ?`,
+          [full_name, phone, address, sellers[0].user_id]
+        );
+      }
+    }
+
+    // Fetch updated profile
+    const [updated] = await pool.query(
+      `SELECT s.*, u.full_name, u.email, u.phone, u.address
+       FROM sellers s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.id = ?`,
+      [sellerId]
+    );
+
+    return res.json({
+      success: true,
+      message: 'খামারের প্রোফাইল ও পেমেন্ট তথ্য সফলভাবে সংরক্ষিত হয়েছে (Profile saved)',
+      profile: updated[0] || null
+    });
   } catch (err) {
+    console.error('Error updating seller profile:', err);
     return res.status(500).json({ message: 'Failed to update profile', error: err.message });
   }
 };

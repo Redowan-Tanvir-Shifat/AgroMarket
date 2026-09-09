@@ -330,8 +330,8 @@ const translations = {
     deleteOrderModalCancel: 'বাতিল',
     deleteOrderBtn: 'মুছুন',
 
-    // Seller Profile & Payout Settings
-    sellerProfileTitle: 'খামারের প্রোফাইল ও পেমেন্ট সেটিংস',
+    // Seller Profile & Settings
+    sellerProfileTitle: 'খামারের প্রোফাইল ও সেটিংস',
     sellerProfileSubtitle: 'ডিজিটাল পেমেন্ট ও খামারের তথ্য আপডেট রাখুন',
     farmNameLabel: 'খামারের নাম (Farm Name)',
     farmDivisionLabel: 'বিভাগ',
@@ -341,7 +341,22 @@ const translations = {
     nidLicenseLabel: 'এনআইডি অথবা ট্রেড লাইসেন্স নম্বর',
     payoutMethodLabel: 'পছন্দের পেমেন্ট গ্রহণের মাধ্যম',
     payoutNumberLabel: 'বিকাশ / নগদ / ব্যাংক অ্যাকাউন্ট নম্বর',
-    saveProfileBtn: 'প্রোফাইল তথ্য সংরক্ষণ করুন'
+    saveProfileBtn: 'প্রোফাইল তথ্য সংরক্ষণ করুন',
+    viewStorefront: 'দোকান দেখুন',
+    verifiedFarmer: 'যাচাইকৃত কৃষক',
+
+    // Seller Business Insights
+    sellerInsightsTag: 'ব্যবসা ও বিক্রয় ইনসাইটস',
+    sellerInsightsTitle: 'খামারের ব্যবসায়িক অগ্রগতি ও রাজস্ব বিশ্লেষণ',
+    sellerInsightsSubtitle: 'রিয়েল-টাইম বিক্রয় বিশ্লেষণ, শীর্ষ ফসল এবং গ্রাহক প্রবণতা পর্যালোচনা করুন',
+    revenueTrendTitle: 'মাসিক রাজস্ব ও বিক্রয় ট্রেন্ড',
+    topSellingCropsTitle: 'সেরা বিক্রিত ফসলসমূহ',
+    avgOrderValueLabel: 'গড় অর্ডার মূল্য',
+    repeatCustomerRateLabel: 'পুনরাবৃত্ত ক্রেতা হার',
+    fulfillmentChannelsTitle: 'ডেলিভারি চ্যানেল বিভাজন',
+    homeCourierLabel: 'হোম কুরিয়ার ডেলিভারি',
+    farmGatePickupLabel: 'খামার গেট থেকে সংগ্রহ',
+    agingSavingsTitle: 'পচন রোধ ও ডাইনামিক প্রাইসিং সাশ্রয়'
   },
   en: {
     // Navigation
@@ -670,8 +685,8 @@ const translations = {
     deleteOrderModalCancel: 'Cancel',
     deleteOrderBtn: 'Delete',
 
-    // Seller Profile & Payout Settings
-    sellerProfileTitle: 'Farm Profile & Digital Payout Settings',
+    // Seller Profile & Settings
+    sellerProfileTitle: 'Farm Profile and Settings',
     sellerProfileSubtitle: 'Configure MFS payout numbers and public farm identity',
     farmNameLabel: 'Farm Name',
     farmDivisionLabel: 'Division',
@@ -681,7 +696,22 @@ const translations = {
     nidLicenseLabel: 'NID or Trade License Number',
     payoutMethodLabel: 'Preferred Digital Payout Method',
     payoutNumberLabel: 'bKash / Nagad / Bank Account Number',
-    saveProfileBtn: 'Save Profile Settings'
+    saveProfileBtn: 'Save Profile Settings',
+    viewStorefront: 'View Storefront',
+    verifiedFarmer: 'Verified Farmer',
+
+    // Seller Business Insights
+    sellerInsightsTag: 'Business Insights & Analytics',
+    sellerInsightsTitle: 'Farm Sales Analytics & Commercial Insights',
+    sellerInsightsSubtitle: 'Real-time crop sales analytics, customer channels, and revenue dynamics',
+    revenueTrendTitle: 'Monthly Revenue & Sales Trajectory',
+    topSellingCropsTitle: 'Top-Performing Crops Leaderboard',
+    avgOrderValueLabel: 'Average Order Value (AOV)',
+    repeatCustomerRateLabel: 'Repeat Customer Rate',
+    fulfillmentChannelsTitle: 'Fulfillment Logistics Channels',
+    homeCourierLabel: 'Home Courier Delivery',
+    farmGatePickupLabel: 'Direct Farm Gate Pickup',
+    agingSavingsTitle: 'Spoilage Avoidance & Aging Savings'
   }
 };
 

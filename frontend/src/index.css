@@ -4,6 +4,10 @@
   body {
     font-family: 'Hind Siliguri', 'Inter', sans-serif;
   }
+
+  button, [role="button"], input[type="submit"], input[type="button"] {
+    cursor: pointer;
+  }
 }
 
 /* Custom Glassmorphism & Eco Gradient Utilities */
