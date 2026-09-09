@@ -21,7 +21,13 @@ import {
   TrendingDown,
   Sparkles,
   Truck,
-  Leaf
+  Leaf,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 
 export default function ProductDetails() {
@@ -47,6 +53,15 @@ export default function ProductDetails() {
   const [userComment, setUserComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewMessage, setReviewMessage] = useState(null);
+
+  // Review Edit & Delete State
+  const [editingReviewId, setEditingReviewId] = useState(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editComment, setEditComment] = useState('');
+  const [isUpdatingReview, setIsUpdatingReview] = useState(false);
+  const [deleteConfirmReviewId, setDeleteConfirmReviewId] = useState(null);
+  const [isDeletingReview, setIsDeletingReview] = useState(false);
+  const [reviewActionNotice, setReviewActionNotice] = useState(null);
 
   useEffect(() => {
     fetchProductDetails();
@@ -209,6 +224,107 @@ export default function ProductDetails() {
     }
   };
 
+  // Review Edit & Delete Handlers
+  const handleStartEdit = (rev) => {
+    setEditingReviewId(rev.id);
+    setEditRating(rev.rating || 5);
+    setEditComment(rev.comment || '');
+    setDeleteConfirmReviewId(null);
+  };
+
+  const handleSaveEdit = async (reviewId) => {
+    try {
+      setIsUpdatingReview(true);
+      const token = localStorage.getItem('agromarket_token');
+      const res = await fetch(`http://localhost:5000/api/reviews/${reviewId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          rating: editRating,
+          comment: editComment
+        })
+      });
+
+      if (res.ok) {
+        setReviews(prev =>
+          prev.map(r =>
+            r.id === reviewId
+              ? {
+                  ...r,
+                  rating: editRating,
+                  comment: editComment
+                }
+              : r
+          )
+        );
+        setEditingReviewId(null);
+        setReviewActionNotice({
+          type: 'success',
+          text: lang === 'bn' ? 'রিভিউ সফলভাবে আপডেট হয়েছে!' : 'Review updated successfully!'
+        });
+        setTimeout(() => setReviewActionNotice(null), 3500);
+      } else {
+        const errData = await res.json();
+        setReviewActionNotice({
+          type: 'error',
+          text: errData.message || (lang === 'bn' ? 'রিভিউ আপডেট করতে ব্যর্থ হয়েছে' : 'Failed to update review')
+        });
+        setTimeout(() => setReviewActionNotice(null), 3500);
+      }
+    } catch (err) {
+      console.error('Failed to update review:', err);
+      setReviewActionNotice({
+        type: 'error',
+        text: lang === 'bn' ? 'রিভিউ আপডেট করতে সমস্যা হয়েছে' : 'Failed to update review'
+      });
+      setTimeout(() => setReviewActionNotice(null), 3500);
+    } finally {
+      setIsUpdatingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    try {
+      setIsDeletingReview(true);
+      const token = localStorage.getItem('agromarket_token');
+      const res = await fetch(`http://localhost:5000/api/reviews/${reviewId}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (res.ok) {
+        setReviews(prev => prev.filter(r => r.id !== reviewId));
+        setDeleteConfirmReviewId(null);
+        setReviewActionNotice({
+          type: 'success',
+          text: lang === 'bn' ? 'রিভিউ সফলভাবে মুছে ফেলা হয়েছে।' : 'Review deleted successfully.'
+        });
+        setTimeout(() => setReviewActionNotice(null), 3500);
+      } else {
+        const errData = await res.json();
+        setReviewActionNotice({
+          type: 'error',
+          text: errData.message || (lang === 'bn' ? 'রিভিউ মুছতে ব্যর্থ হয়েছে' : 'Failed to delete review')
+        });
+        setTimeout(() => setReviewActionNotice(null), 3500);
+      }
+    } catch (err) {
+      console.error('Failed to delete review:', err);
+      setReviewActionNotice({
+        type: 'error',
+        text: lang === 'bn' ? 'রিভিউ মুছতে সমস্যা হয়েছে' : 'Failed to delete review'
+      });
+      setTimeout(() => setReviewActionNotice(null), 3500);
+    } finally {
+      setIsDeletingReview(false);
+    }
+  };
+
   const displayTitle = lang === 'bn' && product.title_bn ? product.title_bn : product.title;
 
   return (
@@ -314,6 +430,32 @@ export default function ProductDetails() {
                 <span>{lang === 'bn' ? `পচন রোধে বর্তমান সাশ্রয়` : 'Freshness Decay Level'}: {agePercent}%</span>
               </div>
             </div>
+          </div>
+
+          {/* Farmer Storefront Profile Widget (Moved to Left Side) */}
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-100 shadow-sm space-y-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-lg shadow-md shrink-0">
+                {product.farm_name ? product.farm_name.charAt(0) : 'F'}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h4 className="font-extrabold text-base text-slate-900 truncate">{product.farm_name}</h4>
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                </div>
+                <p className="text-xs text-slate-500 truncate">
+                  {product.farm_district}, {product.farm_division} • <span className="text-emerald-700 font-bold">{t('verifiedFarmer')}</span>
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to={`/storefront/${product.seller_id}`}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-all flex items-center justify-center gap-2 shadow-2xs hover:shadow-xs"
+            >
+              <span>{t('viewStorefront')}</span>
+              <span>→</span>
+            </Link>
           </div>
         </div>
 
@@ -518,31 +660,6 @@ export default function ProductDetails() {
               </span>
             </div>
           </div>
-
-          {/* Farmer Storefront Profile Widget */}
-          <div className="bg-white rounded-3xl p-6 border border-emerald-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-xl shadow-md">
-                {product.farm_name ? product.farm_name.charAt(0) : 'F'}
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <h4 className="font-extrabold text-base text-slate-900">{product.farm_name}</h4>
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                </div>
-                <p className="text-xs text-slate-500">
-                  {product.farm_district}, {product.farm_division} • <span className="text-emerald-700 font-bold">{t('verifiedFarmer')}</span>
-                </p>
-              </div>
-            </div>
-
-            <Link
-              to={`/storefront/${product.seller_id}`}
-              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-800 hover:text-emerald-700 font-bold text-xs border border-slate-200 transition-all"
-            >
-              {t('viewStorefront')} →
-            </Link>
-          </div>
         </div>
       </div>
 
@@ -630,6 +747,20 @@ export default function ProductDetails() {
           </form>
         </div>
 
+        {/* Review Action Notification Banner */}
+        {reviewActionNotice && (
+          <div
+            className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 mb-4 animate-in fade-in ${
+              reviewActionNotice.type === 'success'
+                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                : 'bg-rose-50 text-rose-800 border border-rose-200'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{reviewActionNotice.text}</span>
+          </div>
+        )}
+
         {/* Reviews List */}
         <div className="space-y-4">
           {reviews.length === 0 ? (
@@ -637,43 +768,195 @@ export default function ProductDetails() {
               {t('noReviewsYet')}
             </div>
           ) : (
-            reviews.map((rev) => (
-              <div
-                key={rev.id}
-                className="p-5 rounded-2xl bg-white border border-slate-100 hover:border-emerald-100 transition-colors"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
-                      {rev.buyer_name ? rev.buyer_name.charAt(0).toUpperCase() : 'B'}
+            reviews.map((rev) => {
+              const isOwner = Boolean(
+                user &&
+                  (user.id === rev.buyer_id ||
+                    user.role === 'admin' ||
+                    (user.id === 1 && (!rev.buyer_id || rev.buyer_id === 1)))
+              );
+
+              return (
+                <div
+                  key={rev.id}
+                  className="p-5 rounded-2xl bg-white border border-slate-100 hover:border-emerald-100 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                        {rev.buyer_name ? rev.buyer_name.charAt(0).toUpperCase() : 'B'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-900 block leading-tight">
+                            {rev.buyer_name || 'AgroMarket ক্রেতা'}
+                          </span>
+                          {isOwner && (
+                            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              {lang === 'bn' ? 'আপনার রিভিউ' : 'You'}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1.5 mt-0.5">
+                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>
+                            {new Date(rev.created_at || Date.now()).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            })}{' • '}
+                            {new Date(rev.created_at || Date.now()).toLocaleTimeString('en-US', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true
+                            })}
+                          </span>
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-bold text-sm text-slate-900 block leading-tight">
-                        {rev.buyer_name || 'AgroMarket ক্রেতা'}
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        {new Date(rev.created_at || Date.now()).toLocaleDateString('bn-BD')}
-                      </span>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center text-amber-400">
+                        {[...Array(5)].map((_, idx) => (
+                          <Star
+                            key={idx}
+                            className={`w-3.5 h-3.5 ${
+                              idx < (editingReviewId === rev.id ? editRating : rev.rating)
+                                ? 'fill-amber-400 text-amber-400'
+                                : 'text-slate-200'
+                            }`}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Owner Edit & Delete Buttons */}
+                      {isOwner && editingReviewId !== rev.id && (
+                        <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(rev)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                            title={lang === 'bn' ? 'রিভিউ সম্পাদনা করুন' : 'Edit Review'}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteConfirmReviewId(rev.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            title={lang === 'bn' ? 'রিভিউ মুছে ফেলুন' : 'Delete Review'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center text-amber-400">
-                    {[...Array(5)].map((_, idx) => (
-                      <Star
-                        key={idx}
-                        className={`w-3.5 h-3.5 ${idx < rev.rating
-                            ? 'fill-amber-400 text-amber-400'
-                            : 'text-slate-200'
-                          }`}
-                      />
-                    ))}
-                  </div>
+                  {/* Inline Edit Form */}
+                  {editingReviewId === rev.id ? (
+                    <div className="mt-3 p-4 rounded-xl bg-slate-50 border border-emerald-200 space-y-3 animate-in fade-in">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700">
+                          {lang === 'bn' ? 'রেটিং পরিবর্তন করুন:' : 'Change Rating:'}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setEditRating(s)}
+                              className="p-1 hover:scale-110 transition-transform cursor-pointer"
+                            >
+                              <Star
+                                className={`w-5 h-5 ${
+                                  s <= editRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <textarea
+                          rows={3}
+                          value={editComment}
+                          onChange={(e) => setEditComment(e.target.value)}
+                          className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                          placeholder={lang === 'bn' ? 'আপনার সংশোধিত মন্তব্য লিখুন...' : 'Update your review comment...'}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditingReviewId(null)}
+                          disabled={isUpdatingReview}
+                          className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 font-bold text-xs transition-colors cursor-pointer"
+                        >
+                          {lang === 'bn' ? 'বাতিল' : 'Cancel'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveEdit(rev.id)}
+                          disabled={isUpdatingReview}
+                          className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                        >
+                          {isUpdatingReview ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                          <span>{lang === 'bn' ? 'সংরক্ষণ করুন' : 'Save Changes'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-700 leading-relaxed mt-2 pl-10">
+                      {rev.comment}
+                    </p>
+                  )}
+
+                  {/* Delete Confirmation Prompt */}
+                  {deleteConfirmReviewId === rev.id && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-3 animate-in fade-in">
+                      <div className="flex items-center gap-2 text-xs text-rose-800 font-medium">
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>
+                          {lang === 'bn'
+                            ? 'আপনি কি নিশ্চিত এই রিভিউটি মুছে ফেলতে চান?'
+                            : 'Are you sure you want to delete this review?'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteConfirmReviewId(null)}
+                          disabled={isDeletingReview}
+                          className="px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                        >
+                          {lang === 'bn' ? 'না' : 'No'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteReview(rev.id)}
+                          disabled={isDeletingReview}
+                          className="px-3 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          {isDeletingReview ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          <span>{lang === 'bn' ? 'হ্যাঁ, মুছুন' : 'Yes, Delete'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-slate-700 leading-relaxed mt-2 pl-10">
-                  {rev.comment}
-                </p>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>

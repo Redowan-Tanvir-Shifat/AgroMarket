@@ -9,8 +9,10 @@ import {
   updateProductStock,
   deleteProduct,
   getSellerOrders,
+  updateSellerOrderStatus,
   getSellerProfile,
-  updateSellerProfile
+  updateSellerProfile,
+  softDeleteSellerOrder
 } from '../controllers/sellerController.js';
 import { verifyToken } from '../middleware/authMiddleware.js';
 
@@ -37,6 +39,8 @@ router.put('/products/:id', softAuth, updateProduct);
 router.patch('/products/:id/stock', softAuth, updateProductStock);
 router.delete('/products/:id', softAuth, deleteProduct);
 router.get('/orders', softAuth, getSellerOrders);
+router.patch('/orders/:id/status', softAuth, updateSellerOrderStatus);
+router.delete('/orders/:id', softAuth, softDeleteSellerOrder);
 router.get('/profile', softAuth, getSellerProfile);
 router.put('/profile', softAuth, updateSellerProfile);
 

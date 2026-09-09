@@ -69,11 +69,20 @@ export default function CartCheckout() {
     e.preventDefault();
     setCheckoutError(null);
 
-    if (!formData.fullName || !formData.phone || !formData.address) {
+    if (!formData.fullName?.trim() || !formData.phone?.trim()) {
       setCheckoutError(
         lang === 'bn'
-          ? 'অনুগ্রহ করে নাম, মোবাইল নম্বর এবং বিস্তারিত ঠিকানা পূরণ করুন।'
-          : 'Please provide recipient name, mobile number, and full address.'
+          ? 'অনুগ্রহ করে প্রাপকের নাম এবং মোবাইল নম্বর প্রদান করুন।'
+          : 'Please provide recipient name and contact phone number.'
+      );
+      return;
+    }
+
+    if (fulfillmentType === 'DELIVERY' && !formData.address?.trim()) {
+      setCheckoutError(
+        lang === 'bn'
+          ? 'হোম ডেলিভারির জন্য অনুগ্রহ করে বিস্তারিত ঠিকানা পূরণ করুন।'
+          : 'Please provide a detailed delivery address for home courier delivery.'
       );
       return;
     }
@@ -94,11 +103,15 @@ export default function CartCheckout() {
       setIsSubmitting(true);
       const token = localStorage.getItem('agromarket_token');
 
+      const deliveryAddrText = fulfillmentType === 'PICKUP'
+        ? (formData.address?.trim() ? `${formData.address}, ` : '') + (lang === 'bn' ? 'খামার গেট থেকে সরাসরি সংগ্রহ' : 'Farm Gate Direct Collection') + `. মোবাইল: ${formData.phone}`
+        : `${formData.address}, ${formData.upazila ? formData.upazila + ', ' : ''}${formData.district}, ${formData.division}. মোবাইল: ${formData.phone}`;
+
       const payload = {
         items: cart,
         fulfillmentType,
         paymentMethod: method,
-        deliveryAddress: `${formData.address}, ${formData.upazila ? formData.upazila + ', ' : ''}${formData.district}, ${formData.division}. মোবাইল: ${formData.phone}`,
+        deliveryAddress: deliveryAddrText,
         totalAmount: grandTotal
       };
 
@@ -475,16 +488,18 @@ export default function CartCheckout() {
 
             <div className="space-y-3">
               {/* bKash */}
-              <label
+              <div
+                onClick={() => setPaymentMethod('BKASH')}
                 className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                   paymentMethod === 'BKASH'
-                    ? 'border-[#D12053] bg-pink-50/50'
+                    ? 'border-[#D12053] bg-pink-50/50 ring-2 ring-[#D12053]/20 shadow-xs'
                     : 'border-slate-200 hover:border-pink-200 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
+                    id="pm-bkash"
                     name="paymentMethod"
                     value="BKASH"
                     checked={paymentMethod === 'BKASH'}
@@ -492,26 +507,28 @@ export default function CartCheckout() {
                     className="text-[#D12053] focus:ring-[#D12053]"
                   />
                   <div>
-                    <span className="font-extrabold text-sm text-slate-900 block">{t('bkashPay')}</span>
+                    <label htmlFor="pm-bkash" className="font-extrabold text-sm text-slate-900 block cursor-pointer">{t('bkashPay')}</label>
                     <span className="text-[11px] text-slate-500">
                       {lang === 'bn' ? 'বিকাশ পেমেন্ট গেটওয়ে (সিমুলেশন)' : 'bKash Payment Gateway (Simulation)'}
                     </span>
                   </div>
                 </div>
                 <span className="text-xs font-black text-[#D12053] bg-pink-100 px-2 py-0.5 rounded">bKash</span>
-              </label>
+              </div>
 
               {/* Nagad */}
-              <label
+              <div
+                onClick={() => setPaymentMethod('NAGAD')}
                 className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                   paymentMethod === 'NAGAD'
-                    ? 'border-[#F7931E] bg-orange-50/50'
+                    ? 'border-[#F7931E] bg-orange-50/50 ring-2 ring-[#F7931E]/20 shadow-xs'
                     : 'border-slate-200 hover:border-orange-200 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
+                    id="pm-nagad"
                     name="paymentMethod"
                     value="NAGAD"
                     checked={paymentMethod === 'NAGAD'}
@@ -519,26 +536,28 @@ export default function CartCheckout() {
                     className="text-[#F7931E] focus:ring-[#F7931E]"
                   />
                   <div>
-                    <span className="font-extrabold text-sm text-slate-900 block">{t('nagadPay')}</span>
+                    <label htmlFor="pm-nagad" className="font-extrabold text-sm text-slate-900 block cursor-pointer">{t('nagadPay')}</label>
                     <span className="text-[11px] text-slate-500">
                       {lang === 'bn' ? 'নগদ অ্যাকাউন্ট পেমেন্ট' : 'Nagad Mobile Account'}
                     </span>
                   </div>
                 </div>
                 <span className="text-xs font-black text-[#F7931E] bg-orange-100 px-2 py-0.5 rounded">Nagad</span>
-              </label>
+              </div>
 
               {/* Rocket */}
-              <label
+              <div
+                onClick={() => setPaymentMethod('ROCKET')}
                 className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                   paymentMethod === 'ROCKET'
-                    ? 'border-[#8C3494] bg-purple-50/50'
+                    ? 'border-[#8C3494] bg-purple-50/50 ring-2 ring-[#8C3494]/20 shadow-xs'
                     : 'border-slate-200 hover:border-purple-200 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
+                    id="pm-rocket"
                     name="paymentMethod"
                     value="ROCKET"
                     checked={paymentMethod === 'ROCKET'}
@@ -546,26 +565,28 @@ export default function CartCheckout() {
                     className="text-[#8C3494] focus:ring-[#8C3494]"
                   />
                   <div>
-                    <span className="font-extrabold text-sm text-slate-900 block">{t('rocketPay')}</span>
+                    <label htmlFor="pm-rocket" className="font-extrabold text-sm text-slate-900 block cursor-pointer">{t('rocketPay')}</label>
                     <span className="text-[11px] text-slate-500">
                       {lang === 'bn' ? 'ডাচ-বাংলা রকেট মোবাইল ব্যাংকিং' : 'DBBL Rocket Mobile Banking'}
                     </span>
                   </div>
                 </div>
                 <span className="text-xs font-black text-[#8C3494] bg-purple-100 px-2 py-0.5 rounded">Rocket</span>
-              </label>
+              </div>
 
               {/* Cash on Delivery */}
-              <label
+              <div
+                onClick={() => setPaymentMethod('COD')}
                 className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                   paymentMethod === 'COD'
-                    ? 'border-emerald-600 bg-emerald-50/50'
+                    ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/20 shadow-xs'
                     : 'border-slate-200 hover:border-emerald-200 bg-white'
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <input
                     type="radio"
+                    id="pm-cod"
                     name="paymentMethod"
                     value="COD"
                     checked={paymentMethod === 'COD'}
@@ -573,14 +594,26 @@ export default function CartCheckout() {
                     className="text-emerald-600 focus:ring-emerald-500"
                   />
                   <div>
-                    <span className="font-extrabold text-sm text-slate-900 block">{t('codPay')}</span>
+                    <label htmlFor="pm-cod" className="font-extrabold text-sm text-slate-900 block cursor-pointer">{t('codPay')}</label>
                     <span className="text-[11px] text-slate-500">
                       {lang === 'bn' ? 'পণ্য হাতে পেয়ে মূল্য পরিশোধ করুন' : 'Pay in cash upon receiving produce'}
                     </span>
                   </div>
                 </div>
                 <span className="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">COD</span>
-              </label>
+              </div>
+
+              {/* COD Explanatory Note */}
+              {paymentMethod === 'COD' && (
+                <div className="p-3.5 rounded-2xl bg-emerald-100/70 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-start gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <span>
+                    {lang === 'bn'
+                      ? 'ক্যাশ অন ডেলিভারি সক্রিয়: অর্ডার সম্পন্ন করার পর কোনো অগ্রিম পেমেন্টের প্রয়োজন নেই। ফসল হাতে পেয়ে মূল্য পরিশোধ করুন।'
+                      : 'Cash on Delivery Active: No advance payment required. Pay in cash upon inspection and receipt of your fresh produce.'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -618,6 +651,19 @@ export default function CartCheckout() {
               </div>
             </div>
 
+            {/* Error banner above button */}
+            {checkoutError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <span>{checkoutError}</span>
+                </div>
+                <button type="button" onClick={() => setCheckoutError(null)}>
+                  <X className="w-3.5 h-3.5 text-rose-500" />
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={handleInitiateOrder}
@@ -628,8 +674,11 @@ export default function CartCheckout() {
               <span>{isSubmitting ? t('orderProcessing') : t('placeOrderBtn')}</span>
             </button>
 
-            <p className="text-center text-[11px] text-slate-400">
-              {lang === 'bn' ? '🔒 নিরাপদ ও এনক্রিপ্টেড পেমেন্ট প্রসেসিং' : '🔒 Safe & Encrypted Payment Processing'}
+            <p className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>
+                {lang === 'bn' ? 'নিরাপদ ও নির্ভরযোগ্য কৃষি পেমেন্ট প্রসেসিং' : 'Safe & Encrypted Payment Processing'}
+              </span>
             </p>
           </div>
         </div>

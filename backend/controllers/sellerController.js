@@ -99,23 +99,24 @@ export const getSellerDashboardStats = async (req, res) => {
     }
     const seller = sellers[0];
 
-    // 2. Earnings & Orders Totals
+    // 2. Earnings & Orders Totals (excluding orders deleted by this seller)
     const [earningsRes] = await pool.query(
-      `SELECT COALESCE(SUM(subtotal_bdt), 0) as total_earnings,
-              COUNT(DISTINCT order_id) as total_orders
-       FROM order_items
-       WHERE seller_id = ?`,
+      `SELECT COALESCE(SUM(oi.subtotal_bdt), 0) as total_earnings,
+              COUNT(DISTINCT oi.order_id) as total_orders
+       FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0`,
       [sellerId]
     );
     const totalEarnings = parseFloat(earningsRes[0]?.total_earnings || 0);
     const totalOrders = parseInt(earningsRes[0]?.total_orders || 0);
 
-    // 3. Pending / Active Orders Count
+    // 3. Pending / Active Orders Count (excluding orders deleted by this seller)
     const [pendingRes] = await pool.query(
       `SELECT COUNT(DISTINCT o.id) as pending_orders
        FROM orders o
        JOIN order_items oi ON o.id = oi.order_id
-       WHERE oi.seller_id = ? AND o.order_status IN ('PENDING', 'PROCESSING', 'READY_FOR_PICKUP')`,
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0 AND o.order_status IN ('PENDING', 'PROCESSING', 'READY_FOR_PICKUP')`,
       [sellerId]
     );
     const pendingOrders = parseInt(pendingRes[0]?.pending_orders || 0);
@@ -132,7 +133,7 @@ export const getSellerDashboardStats = async (req, res) => {
     );
     const cropStats = cropsRes[0] || {};
 
-    // 5. Recent 5 Orders for this seller
+    // 5. Recent 5 Orders for this seller (excluding orders deleted by this seller)
     const [recentOrders] = await pool.query(
       `SELECT o.id, o.order_number, o.created_at, o.order_status, o.fulfillment_type,
               o.payment_method, o.payment_status, o.delivery_address,
@@ -142,7 +143,7 @@ export const getSellerDashboardStats = async (req, res) => {
        FROM orders o
        JOIN order_items oi ON o.id = oi.order_id
        JOIN users u ON o.buyer_id = u.id
-       WHERE oi.seller_id = ?
+       WHERE oi.seller_id = ? AND o.deleted_by_seller = 0
        GROUP BY o.id
        ORDER BY o.created_at DESC
        LIMIT 5`,
@@ -443,7 +444,7 @@ export const getSellerOrders = async (req, res) => {
   try {
     const sellerId = await resolveSellerId(req);
 
-    // Fetch orders containing items for this seller
+    // Fetch orders containing items for this seller (excluding orders deleted by this seller)
     const [orders] = await pool.query(
       `SELECT o.id, o.order_number, o.total_amount_bdt, o.fulfillment_type,
               o.payment_method, o.payment_status, o.order_status, o.delivery_address,
@@ -452,6 +453,7 @@ export const getSellerOrders = async (req, res) => {
        FROM orders o
        JOIN users u ON o.buyer_id = u.id
        WHERE o.id IN (SELECT DISTINCT order_id FROM order_items WHERE seller_id = ?)
+         AND o.deleted_by_seller = 0
        ORDER BY o.created_at DESC`,
       [sellerId]
     );
@@ -486,6 +488,49 @@ export const getSellerOrders = async (req, res) => {
   } catch (err) {
     console.error('Error fetching seller orders:', err);
     return res.status(500).json({ message: 'Failed to load seller orders', error: err.message });
+  }
+};
+
+// @desc Update Order Status by Seller
+// @route PATCH /api/seller/orders/:id/status
+export const updateSellerOrderStatus = async (req, res) => {
+  try {
+    const sellerId = await resolveSellerId(req);
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['PENDING', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'অবৈধ অর্ডার স্ট্যাটাস (Invalid status value)' });
+    }
+
+    // Verify this order contains items for this seller
+    const [check] = await pool.query(
+      `SELECT oi.id, o.payment_method, o.payment_status 
+       FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       WHERE oi.order_id = ? AND oi.seller_id = ?`,
+      [id, sellerId]
+    );
+
+    if (check.length === 0) {
+      return res.status(403).json({ message: 'এই অর্ডারের এক্সেস আপনার নেই (Access denied or not your order)' });
+    }
+
+    // Update order status. For COD orders, payment_status stays PENDING until buyer confirms payment
+    await pool.query(
+      'UPDATE orders SET order_status = ? WHERE id = ?',
+      [status, id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'অর্ডারের স্ট্যাটাস সফলভাবে আপডেট করা হয়েছে (Order status updated)',
+      status
+    });
+  } catch (err) {
+    console.error('Error updating seller order status:', err);
+    return res.status(500).json({ message: 'স্ট্যাটাস আপডেট ব্যর্থ হয়েছে', error: err.message });
   }
 };
 
@@ -558,3 +603,43 @@ export const updateSellerProfile = async (req, res) => {
     return res.status(500).json({ message: 'Failed to update profile', error: err.message });
   }
 };
+
+// @desc Soft delete order (Seller action: sets deleted_by_seller = 1)
+// @route DELETE /api/seller/orders/:id
+export const softDeleteSellerOrder = async (req, res) => {
+  try {
+    const sellerId = await resolveSellerId(req);
+    const { id } = req.params;
+
+    // Check that order exists and has items for this seller
+    const [check] = await pool.query(
+      `SELECT oi.id 
+       FROM order_items oi
+       WHERE oi.order_id = ? AND oi.seller_id = ?`,
+      [id, sellerId]
+    );
+
+    if (check.length === 0) {
+      return res.status(404).json({ message: 'অর্ডার পাওয়া যায়নি অথবা আপনার এই অর্ডারে এক্সেস নেই' });
+    }
+
+    // Mark as deleted by seller only (seller's UI). Admin preserves record in DB.
+    await pool.query(
+      `UPDATE orders 
+       SET deleted_by_seller = 1, 
+           deleted_at = NOW(), 
+           is_deleted = CASE WHEN deleted_by_buyer = 1 THEN 1 ELSE 0 END 
+       WHERE id = ?`,
+      [id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'অর্ডারটি সফলভাবে আপনার তালিকা থেকে মুছে ফেলা হয়েছে (Order removed from seller view)'
+    });
+  } catch (err) {
+    console.error('Error soft deleting seller order:', err);
+    return res.status(500).json({ message: 'অর্ডার মুছতে সমস্যা হয়েছে', error: err.message });
+  }
+};
+

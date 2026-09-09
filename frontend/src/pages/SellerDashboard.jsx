@@ -348,15 +348,19 @@ export default function SellerDashboard() {
                             {ord.order_number}
                           </span>
                           <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            ord.order_status === 'PROCESSING'
+                            ord.order_status === 'DELIVERED' && ord.payment_method === 'COD' && ord.payment_status === 'PENDING'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                              : ord.order_status === 'DELIVERED'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : ord.order_status === 'PROCESSING'
                               ? 'bg-amber-100 text-amber-800 border border-amber-300'
                               : ord.order_status === 'READY_FOR_PICKUP'
                               ? 'bg-purple-100 text-purple-800 border border-purple-300'
-                              : ord.order_status === 'DELIVERED'
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               : 'bg-slate-200 text-slate-700'
                           }`}>
-                            {t(`orderStatus${ord.order_status.charAt(0) + ord.order_status.slice(1).toLowerCase()}`) || ord.order_status}
+                            {ord.order_status === 'DELIVERED' && ord.payment_method === 'COD' && ord.payment_status === 'PENDING'
+                              ? (lang === 'bn' ? 'ডেলিভারি (পেমেন্ট বকেয়া)' : 'Delivered (Unpaid)')
+                              : (t(`orderStatus${ord.order_status.charAt(0) + ord.order_status.slice(1).toLowerCase()}`) || ord.order_status)}
                           </span>
                         </div>
 

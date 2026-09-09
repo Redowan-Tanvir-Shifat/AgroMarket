@@ -323,6 +323,12 @@ const translations = {
     markDispatchedBtn: 'কুরিয়ারে হস্তান্তর সম্পন্ন',
     markReadyPickupBtn: 'খামারে সংগ্রহের জন্য প্রস্তুত',
     markDeliveredBtn: 'ডেলিভারি সফল চিহ্নিত করুন',
+    deleteOrderModalTitle: 'অর্ডারটি মুছে ফেলতে চান?',
+    sellerDeleteOrderModalDesc: 'এই অর্ডারটি আপনার বিক্রেতা ড্যাশবোর্ড থেকে মুছে ফেলা হবে। তবে ক্রেতার অর্ডার হিস্ট্রি এবং প্রশাসনিক ডাটাবেজে রেকর্ডটি সুরক্ষিত থাকবে।',
+    buyerDeleteOrderModalDesc: 'এই অর্ডারটি আপনার অ্যাকাউন্ট হিস্ট্রি থেকে মুছে ফেলা হবে। তবে সংশ্লিষ্ট বিক্রেতার তালিকা এবং প্রশাসনিক ডাটাবেজে রেকর্ডটি সুরক্ষিত থাকবে।',
+    deleteOrderModalConfirm: 'হ্যাঁ, অর্ডার মুছুন',
+    deleteOrderModalCancel: 'বাতিল',
+    deleteOrderBtn: 'মুছুন',
 
     // Seller Profile & Payout Settings
     sellerProfileTitle: 'খামারের প্রোফাইল ও পেমেন্ট সেটিংস',
@@ -657,6 +663,12 @@ const translations = {
     markDispatchedBtn: 'Handed over to Courier',
     markReadyPickupBtn: 'Ready for Farm Pickup',
     markDeliveredBtn: 'Mark as Delivered',
+    deleteOrderModalTitle: 'Delete this order?',
+    sellerDeleteOrderModalDesc: 'This order will be removed from your seller fulfillment queue, while safely preserved in the customer history and admin database.',
+    buyerDeleteOrderModalDesc: 'This order will be removed from your purchase history, while safely preserved in the seller dashboard and admin database.',
+    deleteOrderModalConfirm: 'Yes, Delete Order',
+    deleteOrderModalCancel: 'Cancel',
+    deleteOrderBtn: 'Delete',
 
     // Seller Profile & Payout Settings
     sellerProfileTitle: 'Farm Profile & Digital Payout Settings',

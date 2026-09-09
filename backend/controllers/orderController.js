@@ -32,7 +32,7 @@ export const createOrder = async (req, res) => {
         paymentMethod || 'BKASH',
         deliveryAddress || 'Dhaka, Bangladesh',
         paymentMethod === 'COD' ? 'PENDING' : 'PAID',
-        'PROCESSING'
+        'PENDING'
       ]
     );
 
@@ -70,14 +70,14 @@ export const createOrder = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Order placed successfully 🌾',
+      message: 'Order placed successfully',
       order: {
         id: orderId,
         orderNumber,
         totalAmount,
         fulfillmentType,
         paymentMethod,
-        orderStatus: 'PROCESSING',
+        orderStatus: 'PENDING',
         createdAt: new Date().toISOString()
       }
     });
@@ -96,9 +96,9 @@ export const getMyOrders = async (req, res) => {
   try {
     const buyerId = req.user ? req.user.id : 1;
 
-    // 1. Fetch orders
+    // 1. Fetch orders (excluding orders deleted by this buyer)
     const [orders] = await pool.query(
-      `SELECT * FROM orders WHERE buyer_id = ? ORDER BY created_at DESC`,
+      `SELECT * FROM orders WHERE buyer_id = ? AND deleted_by_buyer = 0 ORDER BY created_at DESC`,
       [buyerId]
     );
 
@@ -108,12 +108,13 @@ export const getMyOrders = async (req, res) => {
 
     const orderIds = orders.map((o) => o.id);
 
-    // 2. Fetch items for these orders
+    // 2. Fetch items for these orders with seller/farm details
     const [items] = await pool.query(
-      `SELECT oi.*, p.title, p.title_bn, p.image_url, p.unit, s.farm_name, s.district as farm_district
+      `SELECT oi.*, p.title, p.title_bn, p.image_url, p.unit, s.farm_name, s.district as farm_district, s.division as farm_division, s.upazila as farm_upazila, u.full_name as farmer_name, u.phone as farmer_phone
        FROM order_items oi
        JOIN products p ON oi.product_id = p.id
        JOIN sellers s ON oi.seller_id = s.id
+       LEFT JOIN users u ON s.user_id = u.id
        WHERE oi.order_id IN (?)`,
       [orderIds]
     );
@@ -192,6 +193,68 @@ export const updateOrderStatus = async (req, res) => {
   } catch (err) {
     console.error('Error updating order status:', err);
     return res.status(500).json({ message: 'Failed to update status', error: err.message });
+  }
+};
+
+// @desc Buyer confirms COD payment upon delivery
+// @route PATCH /api/orders/:id/confirm-payment
+export const confirmOrderPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [orders] = await pool.query('SELECT * FROM orders WHERE id = ?', [id]);
+    if (orders.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    await pool.query(
+      'UPDATE orders SET payment_status = "PAID", order_status = "DELIVERED" WHERE id = ?',
+      [id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'পেমেন্ট সফলভাবে সম্পন্ন হয়েছে এবং ডেলিভারি নিশ্চিত হয়েছে (Payment confirmed & delivered)',
+      order: {
+        id: parseInt(id),
+        payment_status: 'PAID',
+        order_status: 'DELIVERED'
+      }
+    });
+  } catch (err) {
+    console.error('Error confirming order payment:', err);
+    return res.status(500).json({ message: 'Failed to confirm payment', error: err.message });
+  }
+};
+
+// @desc Soft delete order (Buyer action: sets deleted_by_buyer = 1)
+// @route DELETE /api/orders/:id
+export const softDeleteOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [orders] = await pool.query('SELECT * FROM orders WHERE id = ?', [id]);
+    if (orders.length === 0) {
+      return res.status(404).json({ message: 'অর্ডার পাওয়া যায়নি (Order not found)' });
+    }
+
+    // Mark as deleted by buyer only (buyer's UI). Admin preserves record in DB.
+    await pool.query(
+      `UPDATE orders 
+       SET deleted_by_buyer = 1, 
+           deleted_at = NOW(), 
+           is_deleted = CASE WHEN deleted_by_seller = 1 THEN 1 ELSE 0 END 
+       WHERE id = ?`,
+      [id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'অর্ডারটি সফলভাবে আপনার তালিকা থেকে মুছে ফেলা হয়েছে (Order removed from buyer view)'
+    });
+  } catch (err) {
+    console.error('Error soft deleting buyer order:', err);
+    return res.status(500).json({ message: 'অর্ডার মোছা ব্যর্থ হয়েছে (Failed to delete order)', error: err.message });
   }
 };
 

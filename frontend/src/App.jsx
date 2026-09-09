@@ -20,6 +20,7 @@ import Wishlist from './pages/Wishlist';
 import SellerDashboard from './pages/SellerDashboard';
 import SellerInventory from './pages/SellerInventory';
 import SellerProductForm from './pages/SellerProductForm';
+import SellerOrders from './pages/SellerOrders';
 
 export default function App() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
                   <Route path="/account/wishlist" element={<Wishlist />} />
                   <Route path="/seller/dashboard" element={<SellerDashboard />} />
                   <Route path="/seller/inventory" element={<SellerInventory />} />
+                  <Route path="/seller/orders" element={<SellerOrders />} />
                   <Route path="/seller/products/new" element={<SellerProductForm />} />
                   <Route path="/seller/products/:id/edit" element={<SellerProductForm />} />
                 </Routes>
