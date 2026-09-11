@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
@@ -42,6 +42,8 @@ export function SocketProvider({ children }) {
     }
   }, []);
 
+  const seenNotificationIds = useRef(new Set());
+
   // Helper to reliably get JWT token
   const getAuthToken = () => localStorage.getItem('agromarket_token') || localStorage.getItem('token');
 
@@ -55,8 +57,10 @@ export function SocketProvider({ children }) {
         params: { userId: user.id }
       });
       if (res.data?.success) {
-        setNotifications(res.data.notifications || []);
+        const notifs = res.data.notifications || [];
+        setNotifications(notifs);
         setUnreadCount(res.data.unreadCount || 0);
+        notifs.forEach((n) => seenNotificationIds.current.add(n.id));
       }
     } catch (err) {
       console.error('Failed to load notifications:', err);
@@ -123,36 +127,33 @@ export function SocketProvider({ children }) {
       setOnlineCount(count);
     });
 
-    // Listen for live notifications (direct user channel)
-    s.on('new_notification', (notif) => {
+    // Centralized handler for live notifications
+    const handleLiveNotification = (notif) => {
+      if (!notif || !notif.id) return;
+      if (seenNotificationIds.current.has(notif.id)) return;
+      seenNotificationIds.current.add(notif.id);
+
       playNotificationChime();
-      setNotifications((prev) => {
-        if (prev.some((n) => n.id === notif.id)) return prev;
-        return [notif, ...prev];
-      });
-      setUnreadCount((prev) => prev + 1);
+      setNotifications((prev) => [notif, ...prev.filter((n) => n.id !== notif.id)]);
+      setUnreadCount((cnt) => cnt + 1);
       setToastNotification(notif);
-      setTimeout(() => setToastNotification((curr) => (curr?.id === notif.id ? null : curr)), 7000);
-    });
+      setTimeout(() => {
+        setToastNotification((curr) => (curr?.id === notif.id ? null : curr));
+      }, 7000);
+    };
+
+    // Listen for live notifications (direct user channel)
+    s.on('new_notification', handleLiveNotification);
 
     // Listen for new order alerts (seller farm channel)
-    s.on('new_order_alert', (orderNotif) => {
-      playNotificationChime();
-      setNotifications((prev) => {
-        if (prev.some((n) => n.id === orderNotif.id)) return prev;
-        return [orderNotif, ...prev];
-      });
-      setUnreadCount((prev) => prev + 1);
-      setToastNotification(orderNotif);
-      setTimeout(() => setToastNotification((curr) => (curr?.id === orderNotif.id ? null : curr)), 7000);
-    });
+    s.on('new_order_alert', handleLiveNotification);
 
     setSocket(s);
 
     return () => {
       s.disconnect();
     };
-  }, [playNotificationChime]);
+  }, [playNotificationChime, user]);
 
   // 2. Re-register rooms when user login state changes
   useEffect(() => {

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import {
   Truck,
   Package,
@@ -36,6 +37,7 @@ import {
 export default function SellerOrders() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const { socket } = useSocket();
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -102,10 +104,30 @@ export default function SellerOrders() {
     fetchOrders(selectedSellerId);
   }, [selectedSellerId]);
 
+  // Real-time automatic orders table update when a new order arrives
+  useEffect(() => {
+    if (!socket) return;
+    if (selectedSellerId) {
+      socket.emit('join_seller', selectedSellerId);
+    }
+    const handleOrderEvent = () => {
+      fetchOrders(selectedSellerId);
+    };
+    socket.on('new_order_alert', handleOrderEvent);
+    socket.on('new_notification', handleOrderEvent);
+    return () => {
+      socket.off('new_order_alert', handleOrderEvent);
+      socket.off('new_notification', handleOrderEvent);
+    };
+  }, [socket, selectedSellerId]);
+
   const fetchOrders = async (sellerId) => {
     try {
       setLoading(true);
-      const res = await axios.get(`/api/seller/orders?sellerId=${sellerId}`);
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
+      const res = await axios.get(`/api/seller/orders?sellerId=${sellerId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
       setOrders(res.data.orders || []);
     } catch (err) {
       console.error('Failed to fetch seller orders:', err);
@@ -118,8 +140,11 @@ export default function SellerOrders() {
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
       setUpdatingOrderId(orderId);
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const res = await axios.patch(`/api/seller/orders/${orderId}/status?sellerId=${selectedSellerId}`, {
         status: newStatus
+      }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
 
       // Update local state immediately: keep payment_status as is!

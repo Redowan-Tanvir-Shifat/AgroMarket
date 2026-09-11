@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useSocket } from '../context/SocketContext';
 import {
   ShoppingCart,
   Trash2,
@@ -24,6 +25,7 @@ export default function CartCheckout() {
   const { cart, updateQuantity, removeFromCart, clearCart, subtotal } = useCart();
   const { user } = useAuth();
   const { t, lang } = useLanguage();
+  const { fetchNotifications } = useSocket();
   const navigate = useNavigate();
 
   // Fulfillment: 'DELIVERY' or 'PICKUP'
@@ -101,13 +103,14 @@ export default function CartCheckout() {
   const finalizeOrder = async (method) => {
     try {
       setIsSubmitting(true);
-      const token = localStorage.getItem('agromarket_token');
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
 
       const deliveryAddrText = fulfillmentType === 'PICKUP'
         ? (formData.address?.trim() ? `${formData.address}, ` : '') + (lang === 'bn' ? 'খামার গেট থেকে সরাসরি সংগ্রহ' : 'Farm Gate Direct Collection') + `. মোবাইল: ${formData.phone}`
         : `${formData.address}, ${formData.upazila ? formData.upazila + ', ' : ''}${formData.district}, ${formData.division}. মোবাইল: ${formData.phone}`;
 
       const payload = {
+        buyerId: user?.id,
         items: cart,
         fulfillmentType,
         paymentMethod: method,
@@ -130,6 +133,9 @@ export default function CartCheckout() {
       // Success
       setOrderSuccess(data.order);
       clearCart();
+      if (fetchNotifications) {
+        fetchNotifications();
+      }
     } catch (err) {
       setCheckoutError(err.message);
     } finally {

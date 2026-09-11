@@ -6,14 +6,14 @@ import { createNotificationRecord } from './notificationController.js';
 export const createOrder = async (req, res) => {
   const connection = await pool.getConnection();
   try {
-    const { items, fulfillmentType, paymentMethod, deliveryAddress, totalAmount } = req.body;
+    const { items, fulfillmentType, paymentMethod, deliveryAddress, totalAmount, buyerId: bodyBuyerId } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ message: 'Cart items cannot be empty.' });
     }
 
-    // Buyer ID from verified JWT or default to 1 for demo/guest if not provided
-    const buyerId = req.user ? req.user.id : 1;
+    // Buyer ID from verified JWT, body, or fallback
+    const buyerId = req.user?.id || (bodyBuyerId ? parseInt(bodyBuyerId) : 1);
 
     // Generate unique Bangladeshi Agricultural Order Number e.g. AGRO-2026-8742
     const orderNumber = `AGRO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -80,6 +80,14 @@ export const createOrder = async (req, res) => {
 
     // 3. Dispatch real-time notifications to each seller whose produce was ordered
     try {
+      // Fetch buyer's real name for personalized seller alert
+      let buyerName = req.user?.full_name;
+      if (!buyerName && buyerId) {
+        const [uRows] = await pool.query('SELECT full_name FROM users WHERE id = ?', [buyerId]);
+        if (uRows.length > 0) buyerName = uRows[0].full_name;
+      }
+      if (!buyerName) buyerName = 'সম্মানিত ক্রেতা';
+
       for (const [sId, sData] of Object.entries(resolvedSellerMap)) {
         const [sellers] = await pool.query('SELECT user_id, farm_name FROM sellers WHERE id = ?', [sId]);
         if (sellers.length > 0) {
@@ -90,8 +98,8 @@ export const createOrder = async (req, res) => {
             type: 'ORDER_NEW',
             title: `New Order Received! #${orderNumber}`,
             title_bn: `নতুন অর্ডার এসেছে! #${orderNumber}`,
-            message: `Customer ordered ৳${sData.subtotal.toLocaleString()} worth of fresh produce (${sData.itemsCount} items).`,
-            message_bn: `ক্রেতা ৳${sData.subtotal.toLocaleString()} টাকার তাজা ফসল অর্ডার করেছেন (${sData.itemsCount} টি পণ্য)।`,
+            message: `Buyer ${buyerName} ordered ৳${sData.subtotal.toLocaleString()} worth of fresh produce (${sData.itemsCount} items).`,
+            message_bn: `ক্রেতা ${buyerName} আপনার খামার থেকে ৳${sData.subtotal.toLocaleString()} টাকার তাজা ফসল অর্ডার করেছেন (${sData.itemsCount} টি পণ্য)।`,
             link: '/seller/orders'
           });
         }
@@ -273,7 +281,7 @@ export const updateOrderStatus = async (req, res) => {
           title_bn,
           message,
           message_bn,
-          link: '/buyer/orders'
+          link: '/account/orders'
         });
       }
     } catch (notifErr) {
@@ -302,6 +310,53 @@ export const confirmOrderPayment = async (req, res) => {
       'UPDATE orders SET payment_status = "PAID", order_status = "DELIVERED" WHERE id = ?',
       [id]
     );
+
+    // Dispatch real-time alert to the seller(s) and buyer
+    try {
+      const order = orders[0];
+      const [orderItems] = await pool.query(
+        'SELECT DISTINCT seller_id FROM order_items WHERE order_id = ?',
+        [id]
+      );
+
+      let buyerName = req.user?.full_name;
+      if (!buyerName && order.buyer_id) {
+        const [u] = await pool.query('SELECT full_name FROM users WHERE id = ?', [order.buyer_id]);
+        if (u.length > 0) buyerName = u[0].full_name;
+      }
+      if (!buyerName) buyerName = 'সম্মানিত ক্রেতা';
+
+      for (const item of orderItems) {
+        const [sellers] = await pool.query('SELECT user_id, farm_name FROM sellers WHERE id = ?', [item.seller_id]);
+        if (sellers.length > 0) {
+          await createNotificationRecord({
+            userId: sellers[0].user_id,
+            sellerId: item.seller_id,
+            type: 'ORDER_STATUS',
+            title: `Payment Received! #${order.order_number}`,
+            title_bn: `পেমেন্ট গ্রহণ সম্পন্ন! #${order.order_number}`,
+            message: `Buyer ${buyerName} confirmed payment of ৳${Number(order.total_amount_bdt).toLocaleString()} upon delivery.`,
+            message_bn: `ক্রেতা ${buyerName} #${order.order_number} অর্ডারের ৳${Number(order.total_amount_bdt).toLocaleString()} টাকার পেমেন্ট ও ডেলিভারি নিশ্চিত করেছেন।`,
+            link: '/seller/orders'
+          });
+        }
+      }
+
+      // Notify buyer too
+      if (order.buyer_id) {
+        await createNotificationRecord({
+          userId: order.buyer_id,
+          type: 'ORDER_STATUS',
+          title: `Delivery & Payment Confirmed! #${order.order_number}`,
+          title_bn: `ডেলিভারি ও পেমেন্ট নিশ্চিত হয়েছে! #${order.order_number}`,
+          message: `Your cash payment for order #${order.order_number} has been recorded. Thank you for supporting local farmers!`,
+          message_bn: `আপনার #${order.order_number} অর্ডারের পেমেন্ট সফলভাবে সংরক্ষিত হয়েছে। দেশি কৃষকদের পাশে থাকার জন্য ধন্যবাদ!`,
+          link: '/account/orders'
+        });
+      }
+    } catch (notifErr) {
+      console.error('Non-blocking error dispatching payment confirmation notification:', notifErr);
+    }
 
     return res.json({
       success: true,

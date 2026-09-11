@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import {
   Package,
   Clock,
@@ -28,7 +29,10 @@ import {
 export default function BuyerOrders() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const { socket } = useSocket();
   const navigate = useNavigate();
+
+  const getAuthToken = () => localStorage.getItem('agromarket_token') || localStorage.getItem('token');
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,10 +100,24 @@ export default function BuyerOrders() {
     fetchOrders();
   }, []);
 
+  // Real-time automatic order list update when seller changes status
+  useEffect(() => {
+    if (!socket) return;
+    const handleOrderNotification = (notif) => {
+      if (notif?.type === 'ORDER_STATUS' || notif?.link?.includes('/account/orders')) {
+        fetchOrders();
+      }
+    };
+    socket.on('new_notification', handleOrderNotification);
+    return () => {
+      socket.off('new_notification', handleOrderNotification);
+    };
+  }, [socket]);
+
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('agromarket_token');
+      const token = getAuthToken();
       const res = await fetch('http://localhost:5000/api/orders/my-orders', {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -119,7 +137,7 @@ export default function BuyerOrders() {
   const handleDeleteOrder = async (orderId) => {
     try {
       setDeletingOrderId(orderId);
-      const token = localStorage.getItem('agromarket_token');
+      const token = getAuthToken();
       const res = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
         method: 'DELETE',
         headers: {
@@ -164,7 +182,7 @@ export default function BuyerOrders() {
 
     try {
       setSubmittingReview(true);
-      const token = localStorage.getItem('agromarket_token');
+      const token = getAuthToken();
       const res = await fetch('http://localhost:5000/api/reviews', {
         method: 'POST',
         headers: {
@@ -197,7 +215,7 @@ export default function BuyerOrders() {
   const handleConfirmPayment = async (orderId) => {
     try {
       setConfirmingOrderId(orderId);
-      const token = localStorage.getItem('agromarket_token');
+      const token = getAuthToken();
       const res = await fetch(`http://localhost:5000/api/orders/${orderId}/confirm-payment`, {
         method: 'PATCH',
         headers: {

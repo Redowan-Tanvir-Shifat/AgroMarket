@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { createNotificationRecord } from './notificationController.js';
 
 // Helper to format datetime strings cleanly for MySQL TIMESTAMPDIFF calculations
 const formatDbDatetime = (dt) => {
@@ -753,6 +754,60 @@ export const updateSellerOrderStatus = async (req, res) => {
       'UPDATE orders SET order_status = ? WHERE id = ?',
       [status, id]
     );
+
+    // Dispatch real-time alert to the buyer
+    try {
+      const [orders] = await pool.query('SELECT buyer_id, order_number FROM orders WHERE id = ?', [id]);
+      const [sellers] = await pool.query('SELECT farm_name FROM sellers WHERE id = ?', [sellerId]);
+      if (orders.length > 0) {
+        const order = orders[0];
+        const farmName = sellers.length > 0 ? sellers[0].farm_name : 'খামার';
+
+        let title = `Order Update: #${order.order_number}`;
+        let title_bn = `অর্ডার আপডেট: #${order.order_number}`;
+        let message = `Your order status changed to ${status}.`;
+        let message_bn = `আপনার অর্ডারের বর্তমান অবস্থা: ${status}।`;
+
+        if (status === 'PROCESSING') {
+          title = `Order Being Packaged #${order.order_number}`;
+          title_bn = `অর্ডার প্যাকেজিং শুরু হয়েছে #${order.order_number}`;
+          message = `${farmName} has begun harvesting and packaging your produce.`;
+          message_bn = `${farmName} আপনার তাজা ফসল তোলা ও প্যাকেজিং শুরু করেছে।`;
+        } else if (status === 'READY_FOR_PICKUP') {
+          title = `Ready for Pickup! #${order.order_number}`;
+          title_bn = `ফসল সংগ্রহের জন্য প্রস্তুত! #${order.order_number}`;
+          message = `Your produce is packed and ready at the farm gate.`;
+          message_bn = `${farmName} গেটে আপনার ফসল প্রস্তুত রয়েছে, সংগ্রহ করতে পারেন।`;
+        } else if (status === 'SHIPPED') {
+          title = `Order In Transit #${order.order_number}`;
+          title_bn = `অর্ডার কুরিয়ারে প্রেরিত #${order.order_number}`;
+          message = `${farmName} has handed your parcel over for delivery.`;
+          message_bn = `${farmName} আপনার ঠিকানায় পার্সেলটি কুরিয়ারে হস্তান্তর করেছে।`;
+        } else if (status === 'DELIVERED') {
+          title = `Order Delivered #${order.order_number}`;
+          title_bn = `অর্ডার ডেলিভারি সম্পন্ন #${order.order_number}`;
+          message = `Your fresh crops have been delivered. Enjoy and leave a review!`;
+          message_bn = `আপনার তাজা ফসল পৌঁছে গেছে। অনুগ্রহ করে একটি রিভিউ দিন!`;
+        } else if (status === 'CANCELLED') {
+          title = `Order Cancelled #${order.order_number}`;
+          title_bn = `অর্ডার বাতিল করা হয়েছে #${order.order_number}`;
+          message = `Your order #${order.order_number} has been cancelled.`;
+          message_bn = `আপনার #${order.order_number} অর্ডারটি বাতিল করা হয়েছে।`;
+        }
+
+        await createNotificationRecord({
+          userId: order.buyer_id,
+          type: 'ORDER_STATUS',
+          title,
+          title_bn,
+          message,
+          message_bn,
+          link: '/account/orders'
+        });
+      }
+    } catch (notifErr) {
+      console.error('Non-blocking error dispatching buyer status notification:', notifErr);
+    }
 
     return res.json({
       success: true,

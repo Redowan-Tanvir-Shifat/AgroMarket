@@ -25,7 +25,8 @@ export default function NotificationBell() {
     markAllAsRead,
     isConnected,
     toastNotification,
-    dismissToast
+    dismissToast,
+    fetchNotifications
   } = useSocket();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -86,7 +87,13 @@ export default function NotificationBell() {
       {/* 1. Navbar Bell Trigger */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          const nextState = !isOpen;
+          setIsOpen(nextState);
+          if (nextState && fetchNotifications) {
+            fetchNotifications();
+          }
+        }}
         className="relative p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-emerald-800 transition-all cursor-pointer focus:outline-none"
         title={lang === 'bn' ? 'বিজ্ঞপ্তি' : 'Notifications'}
         aria-label="Notifications"
@@ -210,6 +217,9 @@ export default function NotificationBell() {
               <button
                 type="button"
                 onClick={() => {
+                  if (toastNotification.id && !toastNotification.is_read) {
+                    markAsRead(toastNotification.id);
+                  }
                   dismissToast();
                   navigate(toastNotification.link);
                 }}
