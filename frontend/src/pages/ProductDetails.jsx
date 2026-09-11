@@ -5,9 +5,11 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import FreshnessBadge from '../components/FreshnessBadge';
 import FarmerIdentityModal from '../components/FarmerIdentityModal';
+import ChatModal from '../components/ChatModal';
 import { formatHarvestAge } from '../utils/formatters';
 import {
   MapPin,
+  MessageSquare,
   ShieldCheck,
   Star,
   Calendar,
@@ -54,6 +56,7 @@ export default function ProductDetails() {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [showFarmerModal, setShowFarmerModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
 
   // Review Form
   const [userRating, setUserRating] = useState(5);
@@ -576,13 +579,24 @@ export default function ProductDetails() {
               </div>
             </button>
 
-            <Link
-              to={`/storefront/${product.seller_id}`}
-              className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
-            >
-              <span>{t('viewStorefront')}</span>
-              <span>→</span>
-            </Link>
+            <div className="flex gap-2 pt-1">
+              <Link
+                to={`/storefront/${product.seller_id}`}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm hover:shadow-md"
+              >
+                <span>{t('viewStorefront')}</span>
+                <span>→</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowChatModal(true)}
+                className="py-2.5 px-3.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-950 font-black text-xs transition-all flex items-center justify-center gap-1.5 border border-emerald-300 shadow-2xs cursor-pointer hover:scale-[1.02]"
+                title={lang === 'bn' ? 'কৃষকের সাথে সরাসরি লাইভ চ্যাট করুন' : 'Chat live with farmer'}
+              >
+                <MessageSquare className="w-4 h-4 text-emerald-700 shrink-0" />
+                <span>{lang === 'bn' ? 'চ্যাট করুন' : 'Chat'}</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1105,6 +1119,20 @@ export default function ProductDetails() {
         ratingAvg={product.seller_rating}
         totalRatings={product.seller_total_ratings}
         sellerId={product.seller_id}
+      />
+
+      {/* Real-Time Live Chat Modal with Farmer */}
+      <ChatModal
+        isOpen={showChatModal}
+        onClose={() => setShowChatModal(false)}
+        sellerId={product.seller_id}
+        sellerName={product.seller?.farmer_name || product.farmer_name}
+        farmName={product.farm_name}
+        productId={product.id}
+        productTitle={lang === 'bn' ? (product.title_bn || product.title) : product.title}
+        productImage={product.image_url}
+        productPrice={product.calculated_current_price || product.price_bdt || product.base_price_bdt}
+        productUnit={product.unit}
       />
     </div>
   );

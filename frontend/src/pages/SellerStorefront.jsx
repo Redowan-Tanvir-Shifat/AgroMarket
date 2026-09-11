@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import ProductCard from '../components/ProductCard';
 import FarmHeaderBanner from '../components/FarmHeaderBanner';
+import ChatModal from '../components/ChatModal';
 import {
   ShieldCheck,
   MapPin,
@@ -27,6 +28,7 @@ export default function SellerStorefront() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [showChatModal, setShowChatModal] = useState(false);
 
   useEffect(() => {
     fetchStorefront();
@@ -125,6 +127,7 @@ export default function SellerStorefront() {
           totalProducts={stats.totalProducts}
           isSellerView={false}
           sellerId={sellerId}
+          onOpenChat={() => setShowChatModal(true)}
         />
 
         {/* Direct Farm Pickup & Trust Guarantees */}
@@ -189,6 +192,15 @@ export default function SellerStorefront() {
           </div>
         )}
       </div>
+
+      {/* Real-time Live Chat Modal with Farmer */}
+      <ChatModal
+        isOpen={showChatModal}
+        onClose={() => setShowChatModal(false)}
+        sellerId={sellerId}
+        sellerName={seller.farmer_name}
+        farmName={seller.farm_name}
+      />
     </div>
   );
 }

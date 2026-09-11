@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { createNotificationRecord } from './notificationController.js';
 
 // @desc Create a new order with bKash/Nagad/Rocket/COD & Delivery vs Pickup
 // @route POST /api/orders
@@ -67,6 +68,40 @@ export const createOrder = async (req, res) => {
     }
 
     await connection.commit();
+
+    // 3. Dispatch real-time notifications to each seller whose produce was ordered
+    try {
+      const sellerGroups = {};
+      for (const item of items) {
+        const sId = item.seller_id || 1;
+        if (!sellerGroups[sId]) {
+          sellerGroups[sId] = { itemsCount: 0, subtotal: 0 };
+        }
+        const qty = Number(item.quantity) || 1;
+        const price = Number(item.unitPrice) || Number(item.price) || 0;
+        sellerGroups[sId].itemsCount += qty;
+        sellerGroups[sId].subtotal += price * qty;
+      }
+
+      for (const [sId, sData] of Object.entries(sellerGroups)) {
+        const [sellers] = await pool.query('SELECT user_id, farm_name FROM sellers WHERE id = ?', [sId]);
+        if (sellers.length > 0) {
+          const sellerUser = sellers[0];
+          await createNotificationRecord({
+            userId: sellerUser.user_id,
+            sellerId: parseInt(sId),
+            type: 'ORDER_NEW',
+            title: `New Order Received! #${orderNumber}`,
+            title_bn: `নতুন অর্ডার এসেছে! #${orderNumber}`,
+            message: `Customer ordered ৳${sData.subtotal.toLocaleString()} worth of fresh produce (${sData.itemsCount} items).`,
+            message_bn: `ক্রেতা ৳${sData.subtotal.toLocaleString()} টাকার তাজা ফসল অর্ডার করেছেন (${sData.itemsCount} টি পণ্য)।`,
+            link: '/seller/orders'
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('Non-blocking error dispatching order notification:', notifErr);
+    }
 
     return res.status(201).json({
       success: true,
@@ -188,6 +223,52 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     await pool.query('UPDATE orders SET order_status = ? WHERE id = ?', [status, id]);
+
+    // Dispatch real-time alert to the buyer
+    try {
+      const [orders] = await pool.query('SELECT buyer_id, order_number FROM orders WHERE id = ?', [id]);
+      if (orders.length > 0) {
+        const order = orders[0];
+        let title = `Order Update: #${order.order_number}`;
+        let title_bn = `অর্ডার আপডেট: #${order.order_number}`;
+        let message = `Your order status changed to ${status}.`;
+        let message_bn = `আপনার অর্ডারের বর্তমান অবস্থা: ${status}।`;
+
+        if (status === 'PROCESSING') {
+          title = `Order Being Packaged #${order.order_number}`;
+          title_bn = `অর্ডার প্যাকেজিং শুরু হয়েছে #${order.order_number}`;
+          message = `The farm has begun harvesting and packaging your produce.`;
+          message_bn = `খামার থেকে আপনার তাজা ফসল তোলা ও প্যাকেজিং শুরু হয়েছে।`;
+        } else if (status === 'READY_FOR_PICKUP') {
+          title = `Ready for Pickup! #${order.order_number}`;
+          title_bn = `সংগ্রহের জন্য প্রস্তুত! #${order.order_number}`;
+          message = `Your produce is packed and ready at the farm gate.`;
+          message_bn = `আপনার ফসল প্রস্তুত রয়েছে, খামার গেট থেকে সংগ্রহ করতে পারেন।`;
+        } else if (status === 'SHIPPED') {
+          title = `Order In Transit #${order.order_number}`;
+          title_bn = `অর্ডার কুরিয়ারে প্রেরিত #${order.order_number}`;
+          message = `Your parcel is on the way to your delivery address.`;
+          message_bn = `আপনার ঠিকানায় পাঠানোর জন্য পার্সেলটি কুরিয়ারে হস্তান্তর করা হয়েছে।`;
+        } else if (status === 'DELIVERED') {
+          title = `Order Delivered #${order.order_number}`;
+          title_bn = `অর্ডার ডেলিভারি সম্পন্ন #${order.order_number}`;
+          message = `Your fresh crops have been delivered. Enjoy and leave a review!`;
+          message_bn = `আপনার তাজা ফসল পৌঁছে গেছে। অনুগ্রহ করে একটি রিভিউ দিন!`;
+        }
+
+        await createNotificationRecord({
+          userId: order.buyer_id,
+          type: 'ORDER_STATUS',
+          title,
+          title_bn,
+          message,
+          message_bn,
+          link: '/buyer/orders'
+        });
+      }
+    } catch (notifErr) {
+      console.error('Non-blocking error dispatching buyer status notification:', notifErr);
+    }
 
     return res.json({ success: true, message: `Order status updated to ${status}`, status });
   } catch (err) {

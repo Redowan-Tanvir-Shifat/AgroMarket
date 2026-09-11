@@ -20,7 +20,8 @@ import {
   Sprout,
   ZoomIn,
   Quote,
-  PlusCircle
+  PlusCircle,
+  MessageSquare
 } from 'lucide-react';
 
 export default function FarmHeaderBanner({
@@ -48,7 +49,8 @@ export default function FarmHeaderBanner({
   onCoverUpload,
   onLogoUpload,
   payoutMethod,
-  payoutNumber
+  payoutNumber,
+  onOpenChat
 }) {
   const { lang, t } = useLanguage();
   const [showOwnerModal, setShowOwnerModal] = useState(false);
@@ -329,15 +331,31 @@ export default function FarmHeaderBanner({
               </div>
             )}
 
-            {/* In Buyer Storefront View: Direct Call Button */}
-            {!isSellerView && farmerPhone && (
-              <a
-                href={`tel:${farmerPhone}`}
-                className="px-4 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
-              >
-                <Phone className="w-4 h-4" />
-                <span>{lang === 'bn' ? 'সরাসরি কল করুন' : 'Call Farmer'}</span>
-              </a>
+            {/* In Buyer Storefront View: Direct Call & Chat Live Buttons */}
+            {!isSellerView && (
+              <div className="flex items-center gap-2">
+                {onOpenChat && (
+                  <button
+                    type="button"
+                    onClick={onOpenChat}
+                    className="px-4 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-600/30 transition-all hover:scale-105 cursor-pointer"
+                    title={lang === 'bn' ? 'কৃষকের সাথে সরাসরি লাইভ চ্যাট করুন' : 'Chat live with farmer'}
+                  >
+                    <MessageSquare className="w-4 h-4 text-emerald-200" />
+                    <span>{lang === 'bn' ? 'সরাসরি চ্যাট' : 'Chat Live'}</span>
+                  </button>
+                )}
+
+                {farmerPhone && (
+                  <a
+                    href={`tel:${farmerPhone}`}
+                    className="px-4 py-3 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105"
+                  >
+                    <Phone className="w-4 h-4" />
+                    <span>{lang === 'bn' ? 'সরাসরি কল করুন' : 'Call Farmer'}</span>
+                  </a>
+                )}
+              </div>
             )}
           </div>
         </div>
