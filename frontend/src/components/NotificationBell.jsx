@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSocket } from '../context/SocketContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,7 +13,8 @@ import {
   ExternalLink,
   X,
   Clock,
-  Radio
+  Radio,
+  AlertCircle
 } from 'lucide-react';
 
 export default function NotificationBell() {
@@ -53,16 +55,17 @@ export default function NotificationBell() {
     }
   };
 
-  const getIconForType = (type) => {
+  const getIconForType = (type, size = 'small') => {
+    const cls = size === 'large' ? 'w-6 h-6 stroke-[2.5]' : 'w-4 h-4';
     switch (type) {
       case 'ORDER_NEW':
-        return <Package className="w-4 h-4 text-emerald-600" />;
+        return <Package className={`${cls} ${size === 'small' ? 'text-emerald-600' : ''}`} />;
       case 'ORDER_STATUS':
-        return <Truck className="w-4 h-4 text-blue-600" />;
+        return <Truck className={`${cls} ${size === 'small' ? 'text-blue-600' : ''}`} />;
       case 'CHAT':
-        return <MessageSquare className="w-4 h-4 text-purple-600" />;
+        return <MessageSquare className={`${cls} ${size === 'small' ? 'text-purple-600' : ''}`} />;
       default:
-        return <Sparkles className="w-4 h-4 text-amber-600" />;
+        return <CheckCircle2 className={`${cls} ${size === 'small' ? 'text-emerald-600' : ''}`} />;
     }
   };
 
@@ -187,50 +190,106 @@ export default function NotificationBell() {
         </div>
       )}
 
-      {/* 3. Floating Live Real-Time Toast Notification Popup */}
-      {toastNotification && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-slate-950 text-white p-4 rounded-3xl shadow-2xl border border-emerald-500/40 animate-in slide-in-from-bottom-5 duration-300 flex items-start gap-3.5">
-          <div className="w-9 h-9 rounded-2xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 font-bold shadow-md">
-            {getIconForType(toastNotification.type)}
-          </div>
+      {/* 3. Floating Pop-Up Notification Toast (Matching Seller Profile update toast aesthetic) */}
+      {toastNotification &&
+        createPortal(
+          (() => {
+            const isDanger =
+              toastNotification.type === 'CANCELLED' ||
+              toastNotification.title?.toLowerCase().includes('cancel') ||
+              toastNotification.message?.toLowerCase().includes('cancel') ||
+              toastNotification.title_bn?.includes('বাতিল') ||
+              toastNotification.message_bn?.includes('বাতিল');
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
-                {lang === 'bn' ? 'নতুন অ্যালার্ট' : 'Live Alert'}
-              </span>
-              <button
-                type="button"
-                onClick={dismissToast}
-                className="text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <h4 className="text-xs font-bold text-white truncate mt-0.5">
-              {lang === 'bn' ? (toastNotification.title_bn || toastNotification.title) : toastNotification.title}
-            </h4>
-            <p className="text-[11px] text-emerald-200/90 line-clamp-2 mt-0.5 leading-relaxed">
-              {lang === 'bn' ? (toastNotification.message_bn || toastNotification.message) : toastNotification.message}
-            </p>
-            {toastNotification.link && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (toastNotification.id && !toastNotification.is_read) {
-                    markAsRead(toastNotification.id);
-                  }
-                  dismissToast();
-                  navigate(toastNotification.link);
-                }}
-                className="text-[10px] font-black text-emerald-400 hover:text-emerald-300 underline mt-2 block"
-              >
-                {lang === 'bn' ? 'বিস্তারিত দেখুন →' : 'View Details →'}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+            return (
+              <div className="fixed top-6 right-6 z-50 max-w-md w-[calc(100%-3rem)] sm:w-auto animate-in slide-in-from-top-5 fade-in duration-300 pointer-events-auto">
+                <div
+                  className={`p-4 sm:p-5 rounded-3xl shadow-2xl border-2 backdrop-blur-xl flex items-start gap-3.5 transition-all ${
+                    isDanger
+                      ? 'bg-white/95 border-rose-500 text-slate-900 shadow-rose-500/25 ring-4 ring-rose-500/10'
+                      : 'bg-white/95 border-emerald-500 text-slate-900 shadow-emerald-500/25 ring-4 ring-emerald-500/10'
+                  }`}
+                >
+                  <div
+                    className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                      isDanger
+                        ? 'bg-rose-100 text-rose-700'
+                        : 'bg-emerald-100 text-emerald-700'
+                    }`}
+                  >
+                    {isDanger ? (
+                      <AlertCircle className="w-6 h-6 stroke-[2.5]" />
+                    ) : (
+                      getIconForType(toastNotification.type, 'large')
+                    )}
+                  </div>
+
+                  <div className="flex-1 pr-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          isDanger
+                            ? 'text-rose-700 bg-rose-100/70'
+                            : 'text-emerald-700 bg-emerald-100/70'
+                        }`}
+                      >
+                        {isDanger
+                          ? (lang === 'bn' ? 'অর্ডার বাতিল' : 'Order Alert')
+                          : (lang === 'bn' ? 'নতুন অ্যালার্ট' : 'Live Alert')}
+                      </span>
+                      {!isDanger && (
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      )}
+                    </div>
+
+                    <h4 className="text-sm font-black text-slate-900 mt-1">
+                      {lang === 'bn'
+                        ? (toastNotification.title_bn || toastNotification.title)
+                        : toastNotification.title}
+                    </h4>
+
+                    <p className="text-xs text-slate-600 font-medium mt-0.5 leading-relaxed">
+                      {lang === 'bn'
+                        ? (toastNotification.message_bn || toastNotification.message)
+                        : toastNotification.message}
+                    </p>
+
+                    {toastNotification.link && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (toastNotification.id && !toastNotification.is_read) {
+                            markAsRead(toastNotification.id);
+                          }
+                          dismissToast();
+                          navigate(toastNotification.link);
+                        }}
+                        className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl mt-2.5 transition-all cursor-pointer shadow-2xs group ${
+                          isDanger
+                            ? 'text-rose-800 hover:text-rose-950 bg-rose-100/70 hover:bg-rose-200/80 border border-rose-300/80'
+                            : 'text-emerald-800 hover:text-emerald-950 bg-emerald-100/70 hover:bg-emerald-200/80 border border-emerald-300/80'
+                        }`}
+                      >
+                        <span>{lang === 'bn' ? 'বিস্তারিত দেখুন' : 'View Details'}</span>
+                        <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={dismissToast}
+                    className="text-slate-400 hover:text-slate-700 p-1.5 rounded-xl hover:bg-slate-100 transition-colors shrink-0 cursor-pointer"
+                    aria-label="Close notification"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })(),
+          document.body
+        )}
     </div>
   );
 }
