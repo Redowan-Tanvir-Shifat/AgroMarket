@@ -42,12 +42,15 @@ export function SocketProvider({ children }) {
     }
   }, []);
 
+  // Helper to reliably get JWT token
+  const getAuthToken = () => localStorage.getItem('agromarket_token') || localStorage.getItem('token');
+
   // Fetch notifications from backend
   const fetchNotifications = useCallback(async () => {
     if (!user) return;
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get('/api/notifications', {
+      const token = getAuthToken();
+      const res = await axios.get('http://localhost:5000/api/notifications', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { userId: user.id }
       });
@@ -63,8 +66,8 @@ export function SocketProvider({ children }) {
   // Mark single notification as read
   const markAsRead = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(`/api/notifications/${id}/read`, {}, {
+      const token = getAuthToken();
+      await axios.patch(`http://localhost:5000/api/notifications/${id}/read`, {}, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { userId: user?.id }
       });
@@ -80,8 +83,8 @@ export function SocketProvider({ children }) {
   // Mark all notifications as read
   const markAllAsRead = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.put('/api/notifications/read-all', {}, {
+      const token = getAuthToken();
+      await axios.put('http://localhost:5000/api/notifications/read-all', {}, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { userId: user?.id }
       });
@@ -96,7 +99,7 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     const s = io(socketUrl, {
-      reconnectionAttempts: 10,
+      reconnectionAttempts: 15,
       reconnectionDelay: 2000,
       transports: ['websocket', 'polling']
     });
@@ -105,8 +108,9 @@ export function SocketProvider({ children }) {
       setIsConnected(true);
       if (user?.id) {
         s.emit('join_user', user.id);
-        if (user.role === 'seller' && user.sellerProfile?.id) {
-          s.emit('join_seller', user.sellerProfile.id);
+        const sId = user.sellerProfile?.id || (user.role === 'seller' ? (user.seller_id || 1) : null);
+        if (sId) {
+          s.emit('join_seller', sId);
         }
       }
     });
@@ -119,22 +123,28 @@ export function SocketProvider({ children }) {
       setOnlineCount(count);
     });
 
-    // Listen for live notifications
+    // Listen for live notifications (direct user channel)
     s.on('new_notification', (notif) => {
       playNotificationChime();
-      setNotifications((prev) => [notif, ...prev]);
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === notif.id)) return prev;
+        return [notif, ...prev];
+      });
       setUnreadCount((prev) => prev + 1);
       setToastNotification(notif);
-      setTimeout(() => setToastNotification((curr) => (curr?.id === notif.id ? null : curr)), 6000);
+      setTimeout(() => setToastNotification((curr) => (curr?.id === notif.id ? null : curr)), 7000);
     });
 
-    // Listen for new order alerts
+    // Listen for new order alerts (seller farm channel)
     s.on('new_order_alert', (orderNotif) => {
       playNotificationChime();
-      setNotifications((prev) => [orderNotif, ...prev]);
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === orderNotif.id)) return prev;
+        return [orderNotif, ...prev];
+      });
       setUnreadCount((prev) => prev + 1);
       setToastNotification(orderNotif);
-      setTimeout(() => setToastNotification((curr) => (curr?.id === orderNotif.id ? null : curr)), 6000);
+      setTimeout(() => setToastNotification((curr) => (curr?.id === orderNotif.id ? null : curr)), 7000);
     });
 
     setSocket(s);
@@ -148,8 +158,9 @@ export function SocketProvider({ children }) {
   useEffect(() => {
     if (socket && isConnected && user?.id) {
       socket.emit('join_user', user.id);
-      if (user.role === 'seller' && user.sellerProfile?.id) {
-        socket.emit('join_seller', user.sellerProfile.id);
+      const sId = user.sellerProfile?.id || (user.role === 'seller' ? (user.seller_id || 1) : null);
+      if (sId) {
+        socket.emit('join_seller', sId);
       }
       fetchNotifications();
     }

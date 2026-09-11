@@ -61,7 +61,7 @@ export default function ChatModal({
     const initChat = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
         const res = await fetch('http://localhost:5000/api/chat/start', {
           method: 'POST',
           headers: {
@@ -173,7 +173,7 @@ export default function ChatModal({
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const res = await fetch(`http://localhost:5000/api/chat/conversations/${conversationId}/messages`, {
         method: 'POST',
         headers: {

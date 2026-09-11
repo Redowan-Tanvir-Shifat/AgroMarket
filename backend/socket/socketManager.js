@@ -1,4 +1,5 @@
 import { Server as SocketIOServer } from 'socket.io';
+import pool from '../config/db.js';
 
 let io = null;
 const onlineUsers = new Map(); // userId -> socketId
@@ -18,13 +19,25 @@ export const initSocketServer = (httpServer) => {
 
   io.on('connection', (socket) => {
     // 1. User joins personal room for notifications & direct alerts
-    socket.on('join_user', (userId) => {
+    socket.on('join_user', async (userId) => {
       if (!userId) return;
       const uid = String(userId);
       socket.join(`user_${uid}`);
       socket.userId = uid;
       onlineUsers.set(uid, socket.id);
       io.emit('online_users_count', onlineUsers.size);
+
+      // Auto-join seller room if user is a registered seller in database
+      try {
+        const [sellers] = await pool.query('SELECT id FROM sellers WHERE user_id = ?', [userId]);
+        if (sellers.length > 0) {
+          const sid = String(sellers[0].id);
+          socket.join(`seller_${sid}`);
+          socket.sellerId = sid;
+        }
+      } catch (err) {
+        // non-blocking
+      }
     });
 
     // 2. Seller joins dedicated farm channel for instant fulfillment alerts

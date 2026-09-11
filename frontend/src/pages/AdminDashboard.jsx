@@ -52,7 +52,7 @@ export default function AdminDashboard() {
   const fetchAdminData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       if (!token) return;
 
       const headers = { Authorization: `Bearer ${token}` };
@@ -96,7 +96,7 @@ export default function AdminDashboard() {
   const handleUpdateStatus = async (sellerId, newStatus, notes = '') => {
     try {
       setActionInProgress(sellerId);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const res = await fetch(`http://localhost:5000/api/admin/sellers/${sellerId}/verify`, {
         method: 'PATCH',
         headers: {

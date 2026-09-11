@@ -39,9 +39,11 @@ export const createOrder = async (req, res) => {
 
     const orderId = orderResult.insertId;
 
-    // 2. Insert items into order_items and update stock
+    // 2. Insert items into order_items, update stock, and track sellers accurately
+    const resolvedSellerMap = {}; // seller_id -> { itemsCount, subtotal }
+
     for (const item of items) {
-      // Look up seller_id if not present
+      // Look up seller_id from database if not present or verify it
       let sellerId = item.seller_id;
       if (!sellerId) {
         const [prod] = await connection.query('SELECT seller_id FROM products WHERE id = ?', [item.id]);
@@ -65,25 +67,20 @@ export const createOrder = async (req, res) => {
          WHERE id = ?`,
         [itemQty, item.id]
       );
+
+      // Accumulate for notification per exact seller
+      if (!resolvedSellerMap[sellerId]) {
+        resolvedSellerMap[sellerId] = { itemsCount: 0, subtotal: 0 };
+      }
+      resolvedSellerMap[sellerId].itemsCount += itemQty;
+      resolvedSellerMap[sellerId].subtotal += subtotal;
     }
 
     await connection.commit();
 
     // 3. Dispatch real-time notifications to each seller whose produce was ordered
     try {
-      const sellerGroups = {};
-      for (const item of items) {
-        const sId = item.seller_id || 1;
-        if (!sellerGroups[sId]) {
-          sellerGroups[sId] = { itemsCount: 0, subtotal: 0 };
-        }
-        const qty = Number(item.quantity) || 1;
-        const price = Number(item.unitPrice) || Number(item.price) || 0;
-        sellerGroups[sId].itemsCount += qty;
-        sellerGroups[sId].subtotal += price * qty;
-      }
-
-      for (const [sId, sData] of Object.entries(sellerGroups)) {
+      for (const [sId, sData] of Object.entries(resolvedSellerMap)) {
         const [sellers] = await pool.query('SELECT user_id, farm_name FROM sellers WHERE id = ?', [sId]);
         if (sellers.length > 0) {
           const sellerUser = sellers[0];
@@ -98,6 +95,19 @@ export const createOrder = async (req, res) => {
             link: '/seller/orders'
           });
         }
+      }
+
+      // Also notify buyer if authenticated
+      if (buyerId) {
+        await createNotificationRecord({
+          userId: buyerId,
+          type: 'ORDER_STATUS',
+          title: `Order Placed Successfully! #${orderNumber}`,
+          title_bn: `অর্ডার সম্পন্ন হয়েছে! #${orderNumber}`,
+          message: `Your order for ৳${Number(totalAmount).toLocaleString()} has been placed. Farmers are preparing your fresh harvest.`,
+          message_bn: `আপনার ৳${Number(totalAmount).toLocaleString()} টাকার অর্ডার সফলভাবে সম্পন্ন হয়েছে। খামারিরা ফসল প্রস্তুত করছেন।`,
+          link: '/account/orders'
+        });
       }
     } catch (notifErr) {
       console.error('Non-blocking error dispatching order notification:', notifErr);

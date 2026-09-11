@@ -54,7 +54,7 @@ export default function Messages() {
   // Fetch all user conversations
   const fetchConversations = async (selectFirst = false) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       if (!token) return;
 
       const res = await fetch('http://localhost:5000/api/chat/conversations', {
@@ -99,7 +99,7 @@ export default function Messages() {
     if (sellerId && user) {
       const startChat = async () => {
         try {
-          const token = localStorage.getItem('token');
+          const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
           const res = await fetch('http://localhost:5000/api/chat/start', {
             method: 'POST',
             headers: {
@@ -132,7 +132,7 @@ export default function Messages() {
     const fetchMessages = async () => {
       try {
         setLoadingMessages(true);
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
         const res = await fetch(`http://localhost:5000/api/chat/conversations/${activeConvId}/messages`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -261,7 +261,7 @@ export default function Messages() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const res = await fetch(`http://localhost:5000/api/chat/conversations/${activeConvId}/messages`, {
         method: 'POST',
         headers: {

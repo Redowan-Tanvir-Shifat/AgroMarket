@@ -45,6 +45,7 @@ export const CartProvider = ({ children }) => {
           ...prevCart,
           {
             id: product.id,
+            seller_id: product.seller_id,
             title: product.title,
             title_bn: product.title_bn,
             image_url: product.image_url,
