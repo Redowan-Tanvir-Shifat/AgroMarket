@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import ChatModal from '../components/ChatModal';
 import {
   Truck,
   Package,
@@ -14,6 +15,7 @@ import {
   AlertCircle,
   XCircle,
   Phone,
+  MessageSquare,
   MapPin,
   User,
   Calendar,
@@ -56,6 +58,7 @@ export default function SellerOrders() {
   const [cancelModalOrder, setCancelModalOrder] = useState(null);
   const [deleteModalOrder, setDeleteModalOrder] = useState(null);
   const [deletingOrderId, setDeletingOrderId] = useState(null);
+  const [activeChatBuyer, setActiveChatBuyer] = useState(null);
 
   // Helper to resolve seller/farm details for invoice
   const getSellerInfo = (id) => {
@@ -767,15 +770,35 @@ export default function SellerOrders() {
                         <User className="w-4 h-4 text-emerald-600" />
                         <span>{t('orderCustomerInfo')}</span>
                       </span>
-                      {order.buyer_phone && (
-                        <a
-                          href={`tel:${order.buyer_phone}`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-bold transition-colors"
+                      <div className="flex items-center gap-1.5">
+                        {order.buyer_phone && (
+                          <a
+                            href={`tel:${order.buyer_phone}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                            title={lang === 'bn' ? 'গ্রাহককে কল দিন' : 'Call Buyer'}
+                          >
+                            <Phone className="w-3 h-3 text-emerald-700" />
+                            <span>{lang === 'bn' ? 'কল দিন' : 'Call Buyer'}</span>
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setActiveChatBuyer({
+                            buyerId: order.buyer_id || order.buyer_user_id,
+                            buyerName: order.buyer_name,
+                            productId: order.items?.[0]?.product_id,
+                            productTitle: lang === 'bn' ? order.items?.[0]?.title_bn : order.items?.[0]?.title,
+                            productImage: order.items?.[0]?.image_url,
+                            productPrice: order.items?.[0]?.unit_price_at_purchase_bdt,
+                            productUnit: order.items?.[0]?.unit
+                          })}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                          title={lang === 'bn' ? 'গ্রাহককে মেসেজ পাঠান' : 'Message Buyer'}
                         >
-                          <Phone className="w-3 h-3 text-emerald-700" />
-                          <span>{lang === 'bn' ? 'কল দিন' : 'Call Buyer'}</span>
-                        </a>
-                      )}
+                          <MessageSquare className="w-3 h-3 text-purple-700" />
+                          <span>{lang === 'bn' ? 'মেসেজ' : 'Message'}</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-2 text-xs">
@@ -1361,6 +1384,22 @@ export default function SellerOrders() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Real-Time Live Chat Modal with Buyer */}
+      {activeChatBuyer && (
+        <ChatModal
+          isOpen={Boolean(activeChatBuyer)}
+          onClose={() => setActiveChatBuyer(null)}
+          sellerId={selectedSellerId || user?.sellerProfile?.id || 1}
+          buyerId={activeChatBuyer.buyerId}
+          buyerName={activeChatBuyer.buyerName}
+          productId={activeChatBuyer.productId}
+          productTitle={activeChatBuyer.productTitle}
+          productImage={activeChatBuyer.productImage}
+          productPrice={activeChatBuyer.productPrice}
+          productUnit={activeChatBuyer.productUnit}
+        />
       )}
 
     </div>

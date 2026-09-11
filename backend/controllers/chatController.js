@@ -80,30 +80,51 @@ export const getConversations = async (req, res) => {
  */
 export const startConversation = async (req, res) => {
   try {
-    const buyerId = req.user.id;
-    let { seller_id, product_id, initial_message } = req.body;
+    const currentUserId = req.user.id;
+    let { seller_id, buyer_id, product_id, initial_message } = req.body;
+
+    let resolvedBuyerId = null;
+    let resolvedSellerId = seller_id ? parseInt(seller_id) : null;
+
+    if (buyer_id && parseInt(buyer_id) !== currentUserId) {
+      // Current user is a seller initiating chat with a buyer
+      resolvedBuyerId = parseInt(buyer_id);
+      if (!resolvedSellerId) {
+        resolvedSellerId = req.user.sellerProfile?.id;
+      }
+      if (!resolvedSellerId) {
+        const [sRows] = await pool.query('SELECT id FROM sellers WHERE user_id = ?', [currentUserId]);
+        if (sRows.length > 0) resolvedSellerId = sRows[0].id;
+      }
+    } else {
+      // Current user is a buyer initiating chat with a seller
+      resolvedBuyerId = currentUserId;
+    }
 
     // Resolve seller_id from product if not explicitly given
-    if (!seller_id && product_id) {
+    if (!resolvedSellerId && product_id) {
       const [products] = await pool.query('SELECT seller_id FROM products WHERE id = ?', [product_id]);
       if (products.length > 0) {
-        seller_id = products[0].seller_id;
+        resolvedSellerId = products[0].seller_id;
       }
     }
 
-    if (!seller_id) {
+    if (!resolvedSellerId) {
       return res.status(400).json({ message: 'Seller ID is required to start a chat' });
+    }
+    if (!resolvedBuyerId) {
+      return res.status(400).json({ message: 'Buyer ID is required to start a chat' });
     }
 
     // Check if seller exists and prevent self-chat
-    const [sellers] = await pool.query('SELECT id, user_id, farm_name FROM sellers WHERE id = ?', [seller_id]);
+    const [sellers] = await pool.query('SELECT id, user_id, farm_name FROM sellers WHERE id = ?', [resolvedSellerId]);
     if (sellers.length === 0) {
       return res.status(404).json({ message: 'Farmer storefront not found' });
     }
 
     const seller = sellers[0];
-    if (seller.user_id === buyerId) {
-      return res.status(400).json({ message: 'You cannot initiate a chat with your own storefront' });
+    if (seller.user_id === resolvedBuyerId) {
+      return res.status(400).json({ message: 'You cannot initiate a chat with yourself' });
     }
 
     // Check for existing conversation
@@ -111,7 +132,7 @@ export const startConversation = async (req, res) => {
       `SELECT id FROM conversations 
        WHERE buyer_id = ? AND seller_id = ? 
        ORDER BY last_message_at DESC LIMIT 1`,
-      [buyerId, seller_id]
+      [resolvedBuyerId, resolvedSellerId]
     );
 
     let conversationId = null;
@@ -126,18 +147,21 @@ export const startConversation = async (req, res) => {
       const [insertRes] = await pool.query(
         `INSERT INTO conversations (buyer_id, seller_id, product_id, last_message_at, created_at)
          VALUES (?, ?, ?, NOW(), NOW())`,
-        [buyerId, seller_id, product_id || null]
+        [resolvedBuyerId, resolvedSellerId, product_id || null]
       );
       conversationId = insertRes.insertId;
     }
+
+    const senderRole = currentUserId === seller.user_id ? 'seller' : 'buyer';
+    const recipientUserId = currentUserId === seller.user_id ? resolvedBuyerId : seller.user_id;
 
     // If an initial message was provided, send it
     if (initial_message && initial_message.trim()) {
       const content = initial_message.trim();
       const [msgRes] = await pool.query(
         `INSERT INTO messages (conversation_id, sender_id, sender_role, content, is_read, created_at)
-         VALUES (?, ?, 'buyer', ?, 0, NOW())`,
-        [conversationId, buyerId, content]
+         VALUES (?, ?, ?, ?, 0, NOW())`,
+        [conversationId, currentUserId, senderRole, content]
       );
 
       await pool.query('UPDATE conversations SET last_message_at = NOW() WHERE id = ?', [conversationId]);
@@ -146,8 +170,8 @@ export const startConversation = async (req, res) => {
       const msgObj = {
         id: msgRes.insertId,
         conversation_id: conversationId,
-        sender_id: buyerId,
-        sender_role: 'buyer',
+        sender_id: currentUserId,
+        sender_role: senderRole,
         sender_name: req.user.full_name,
         content,
         is_read: 0,
@@ -155,10 +179,10 @@ export const startConversation = async (req, res) => {
       };
       emitToConversation(conversationId, 'new_message', msgObj);
 
-      // Trigger notification for seller
+      // Trigger notification for recipient
       await createNotificationRecord({
-        userId: seller.user_id,
-        sellerId: seller.id,
+        userId: recipientUserId,
+        sellerId: senderRole === 'buyer' ? seller.id : null,
         type: 'CHAT',
         title: `নতুন বার্তা: ${req.user.full_name}`,
         title_bn: `নতুন বার্তা: ${req.user.full_name}`,

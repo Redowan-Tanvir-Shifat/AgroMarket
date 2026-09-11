@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import ChatModal from '../components/ChatModal';
 import {
   Package,
   Clock,
@@ -23,7 +24,9 @@ import {
   Trash2,
   Printer,
   Sprout,
-  User
+  User,
+  Phone,
+  MessageSquare
 } from 'lucide-react';
 
 export default function BuyerOrders() {
@@ -48,10 +51,14 @@ export default function BuyerOrders() {
   // Invoice Modal State
   const [printModalOrder, setPrintModalOrder] = useState(null);
 
-  // Helper to resolve seller / farm details for buyer invoice
+  // Chat with Farmer State
+  const [activeChatSeller, setActiveChatSeller] = useState(null);
+
+  // Helper to resolve seller / farm details for buyer invoice & contact
   const getOrderSellerInfo = (order) => {
     const firstItem = order?.items?.[0];
     return {
+      sellerId: firstItem?.seller_id || 1,
       farmName: firstItem?.farm_name || (lang === 'bn' ? 'রাজশাহী আম হাব' : 'Rajshahi Mango Hub'),
       farmerName: firstItem?.farmer_name || (lang === 'bn' ? 'মোঃ রফিকুল ইসলাম' : 'Md. Rafiqul Islam'),
       phone: firstItem?.farmer_phone || '+880 1711-234567',
@@ -605,6 +612,69 @@ export default function BuyerOrders() {
                 </div>
               )}
 
+              {/* Farm & Farmer Contact Strip */}
+              {(() => {
+                const sellerInfo = getOrderSellerInfo(order);
+                const firstItem = order.items?.[0];
+                return (
+                  <div className="px-6 py-3.5 bg-emerald-50/50 border-b border-emerald-100 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-emerald-600/20 font-bold">
+                        <Sprout className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs sm:text-sm font-black text-slate-900">{sellerInfo.farmName}</span>
+                          <span className="text-[10px] text-emerald-800 bg-emerald-100/80 border border-emerald-300/80 px-2 py-0.5 rounded-full font-bold">
+                            {sellerInfo.district}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 block mt-0.5">
+                          {lang === 'bn' ? 'খামারি:' : 'Farmer:'}{' '}
+                          <strong className="text-slate-800 font-bold">{sellerInfo.farmerName}</strong>{' '}
+                          {sellerInfo.phone ? `• ${sellerInfo.phone}` : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Direct Call & Message Actions */}
+                    <div className="flex items-center gap-2">
+                      {sellerInfo.phone && (
+                        <a
+                          href={`tel:${sellerInfo.phone}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs shadow-emerald-600/20 cursor-pointer"
+                          title={lang === 'bn' ? 'খামারিকে সরাসরি কল দিন' : 'Call Farmer Directly'}
+                        >
+                          <Phone className="w-3.5 h-3.5 text-white" />
+                          <span>{lang === 'bn' ? 'খামারিকে কল' : 'Call Farmer'}</span>
+                        </a>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveChatSeller({
+                            sellerId: sellerInfo.sellerId,
+                            sellerName: sellerInfo.farmerName,
+                            farmName: sellerInfo.farmName,
+                            productId: firstItem?.product_id,
+                            productTitle: lang === 'bn' && firstItem?.title_bn ? firstItem.title_bn : firstItem?.title,
+                            productImage: firstItem?.image_url,
+                            productPrice: firstItem?.unit_price_at_purchase_bdt,
+                            productUnit: firstItem?.unit
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-xs shadow-purple-600/20 cursor-pointer"
+                        title={lang === 'bn' ? 'খামারিকে মেসেজ পাঠান' : 'Message Farmer'}
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-white" />
+                        <span>{lang === 'bn' ? 'মেসেজ দিন' : 'Message Farmer'}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Items List */}
               <div className="p-6 divide-y divide-slate-100">
                 {order.items?.map((item) => (
@@ -1038,6 +1108,22 @@ export default function BuyerOrders() {
           </div>
         );
       })(), document.body)}
+
+      {/* Real-Time Live Chat Modal with Farmer */}
+      {activeChatSeller && (
+        <ChatModal
+          isOpen={Boolean(activeChatSeller)}
+          onClose={() => setActiveChatSeller(null)}
+          sellerId={activeChatSeller.sellerId}
+          sellerName={activeChatSeller.sellerName}
+          farmName={activeChatSeller.farmName}
+          productId={activeChatSeller.productId}
+          productTitle={activeChatSeller.productTitle}
+          productImage={activeChatSeller.productImage}
+          productPrice={activeChatSeller.productPrice}
+          productUnit={activeChatSeller.productUnit}
+        />
+      )}
     </div>
   );
 }

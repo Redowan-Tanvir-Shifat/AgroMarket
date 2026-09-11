@@ -22,6 +22,8 @@ export default function ChatModal({
   sellerId,
   sellerName,
   farmName,
+  buyerId = null,
+  buyerName = null,
   productId = null,
   productTitle = null,
   productImage = null,
@@ -70,6 +72,7 @@ export default function ChatModal({
           },
           body: JSON.stringify({
             seller_id: sellerId,
+            buyer_id: buyerId,
             product_id: productId
           })
         });
@@ -102,7 +105,7 @@ export default function ChatModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, user, sellerId, productId]);
+  }, [isOpen, user, sellerId, buyerId, productId]);
 
   // Manage Socket.io room & listeners
   useEffect(() => {
@@ -222,13 +225,17 @@ export default function ChatModal({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h3 className="font-extrabold text-sm text-white truncate">
-                  {farmName || sellerName || (lang === 'bn' ? 'খামারির সাথে সরাসরি চ্যাট' : 'Farmer Live Chat')}
+                  {buyerName || farmName || sellerName || (lang === 'bn' ? 'খামারির সাথে সরাসরি চ্যাট' : 'Farmer Live Chat')}
                 </h3>
                 <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               </div>
               <p className="text-[11px] text-emerald-200 truncate">
-                {sellerName ? `${sellerName} • ` : ''}
-                <span className="text-emerald-300 font-bold">{lang === 'bn' ? 'সরাসরি যোগাযোগ' : 'Direct Message'}</span>
+                {buyerName
+                  ? (lang === 'bn' ? 'সম্মানিত ক্রেতা • সরাসরি মেসেজ' : 'Valued Buyer • Direct Message')
+                  : (sellerName ? `${sellerName} • ` : '')}
+                {!buyerName && (
+                  <span className="text-emerald-300 font-bold">{lang === 'bn' ? 'সরাসরি যোগাযোগ' : 'Direct Message'}</span>
+                )}
               </p>
             </div>
           </div>

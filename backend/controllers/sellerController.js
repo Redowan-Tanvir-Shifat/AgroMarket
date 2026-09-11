@@ -678,10 +678,10 @@ export const getSellerOrders = async (req, res) => {
 
     // Fetch orders containing items for this seller (excluding orders deleted by this seller)
     const [orders] = await pool.query(
-      `SELECT o.id, o.order_number, o.total_amount_bdt, o.fulfillment_type,
+      `SELECT o.id, o.order_number, o.buyer_id, o.total_amount_bdt, o.fulfillment_type,
               o.payment_method, o.payment_status, o.order_status, o.delivery_address,
               o.created_at,
-              u.full_name as buyer_name, u.phone as buyer_phone, u.email as buyer_email
+              u.id as buyer_user_id, u.full_name as buyer_name, u.phone as buyer_phone, u.email as buyer_email
        FROM orders o
        JOIN users u ON o.buyer_id = u.id
        WHERE o.id IN (SELECT DISTINCT order_id FROM order_items WHERE seller_id = ?)
