@@ -22,8 +22,11 @@ export default function ChatModal({
   sellerId,
   sellerName,
   farmName,
+  farmLogo = null,
+  farmerAvatar = null,
   buyerId = null,
   buyerName = null,
+  buyerAvatar = null,
   productId = null,
   productTitle = null,
   productImage = null,
@@ -36,18 +39,24 @@ export default function ChatModal({
   const navigate = useNavigate();
 
   const [conversationId, setConversationId] = useState(null);
+  const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
 
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Auto-scroll to latest message
+  // Auto-scroll to latest message inside container ONLY (without scrolling browser page)
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   };
 
   useEffect(() => {
@@ -56,7 +65,7 @@ export default function ChatModal({
 
   // Initialize or fetch conversation when modal opens
   useEffect(() => {
-    if (!isOpen || !user || !sellerId) return;
+    if (!isOpen || !user || (!sellerId && !buyerId)) return;
 
     let isMounted = true;
 
@@ -71,7 +80,7 @@ export default function ChatModal({
             Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({
-            seller_id: sellerId,
+            seller_id: sellerId || user?.sellerProfile?.id,
             buyer_id: buyerId,
             product_id: productId
           })
@@ -90,6 +99,7 @@ export default function ChatModal({
           });
           if (msgRes.ok) {
             const msgData = await msgRes.json();
+            setConversation(msgData.conversation || null);
             setMessages(msgData.messages || []);
           }
         }
@@ -163,12 +173,14 @@ export default function ChatModal({
     }, 1500);
   };
 
-  const handleSendMessage = async (e) => {
-    e?.preventDefault();
-    if (!inputText.trim() || sending || !conversationId) return;
+  const handleSendMessage = async (e, textToSend) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const content = (textToSend !== undefined ? textToSend : inputText).trim();
+    if (!content || sending || !conversationId) return;
 
-    const content = inputText.trim();
-    setInputText('');
+    if (textToSend === undefined) {
+      setInputText('');
+    }
     setSending(true);
 
     if (socket && conversationId) {
@@ -212,22 +224,70 @@ export default function ChatModal({
 
   if (!isOpen) return null;
 
+  const isFarmerTarget = user?.role === 'seller' ? false : (user?.role === 'buyer' ? true : Boolean(!buyerId));
+  const targetFarmLogo = conversation?.seller_logo || conversation?.seller_owner_image || farmLogo || farmerAvatar;
+  const targetBuyerAvatar = conversation?.buyer_avatar || buyerAvatar;
+  const activeAvatar = isFarmerTarget ? targetFarmLogo : targetBuyerAvatar;
+  const activeTitle = isFarmerTarget
+    ? (farmName || conversation?.farm_name || sellerName || conversation?.seller_name || (lang === 'bn' ? 'খামারির সাথে সরাসরি চ্যাট' : 'Farmer Live Chat'))
+    : (buyerName || conversation?.buyer_name || (lang === 'bn' ? 'ক্রেতার সাথে সরাসরি চ্যাট' : 'Buyer Live Chat'));
+
+  const quickReplies = user?.role === 'seller'
+    ? [
+        { bn: 'ফসল একদম তাজা ও প্রস্তুত আছে', en: 'Crop is 100% fresh & ready' },
+        { bn: 'আজই ডেলিভারির জন্য বুক করা যাবে', en: 'Can dispatch for delivery today' },
+        { bn: 'পাইকারি অর্ডারে বিশেষ মূল্যছাড় রয়েছে', en: 'Bulk order discount available' },
+        { bn: 'খামার থেকে সরাসরি সংগ্রহ করতে পারবেন', en: 'Farm pickup is available' }
+      ]
+    : [
+        { bn: 'দাম কি কিছুটা কমানো সম্ভব?', en: 'Is there any discount on bulk order?' },
+        { bn: 'আজকে পাঠালে কবে নাগাদ পাবো?', en: 'When can this be delivered?' },
+        { bn: 'ফসলটি কি একদম টাটকা?', en: 'How fresh is this harvest?' },
+        { bn: 'খামার থেকে সরাসরি পিকআপ করা যাবে?', en: 'Can I pick up directly from the farm?' }
+      ];
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col h-[85vh] sm:h-[620px] overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+      <div className="w-full sm:max-w-2xl bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 flex flex-col h-[85vh] sm:h-[680px] overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
         
-        {/* 1. Header */}
+        {/* 1. Header with Farm Logo or Buyer Profile Photo */}
         <div className="p-4 bg-emerald-800 text-white flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-700/80 border border-emerald-500/40 flex items-center justify-center text-white font-bold shrink-0">
-              <Sprout className="w-5 h-5 text-emerald-300" />
+            <div className={`w-11 h-11 flex items-center justify-center font-bold text-white shrink-0 overflow-hidden shadow-2xs border ${
+              isFarmerTarget 
+                ? 'rounded-2xl bg-emerald-700/80 border-emerald-500/50' 
+                : 'rounded-full bg-blue-700/80 border-blue-400/50'
+            }`}>
+              {activeAvatar ? (
+                <img 
+                  src={activeAvatar} 
+                  alt={activeTitle} 
+                  className="w-full h-full object-cover" 
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                />
+              ) : isFarmerTarget ? (
+                <Sprout className="w-5 h-5 text-emerald-300" />
+              ) : (
+                <User className="w-5 h-5 text-blue-200" />
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <h3 className="font-extrabold text-sm text-white truncate">
-                  {buyerName || farmName || sellerName || (lang === 'bn' ? 'খামারির সাথে সরাসরি চ্যাট' : 'Farmer Live Chat')}
+                  {activeTitle}
                 </h3>
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                {isFarmerTarget ? (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-sm text-[9px] font-black bg-emerald-700 text-emerald-200 border border-emerald-500/40 shrink-0">
+                    <Sprout className="w-2.5 h-2.5 text-emerald-300" />
+                    {lang === 'bn' ? 'ফার্ম লোগো' : 'Farm'}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-sm text-[9px] font-black bg-blue-700 text-blue-200 border border-blue-400/40 shrink-0">
+                    <User className="w-2.5 h-2.5 text-blue-300" />
+                    {lang === 'bn' ? 'ক্রেতার ছবি' : 'Buyer'}
+                  </span>
+                )}
+                {isFarmerTarget && <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />}
               </div>
               <p className="text-[11px] text-emerald-200 truncate">
                 {buyerName
@@ -290,7 +350,7 @@ export default function ChatModal({
         )}
 
         {/* 3. Messages Feed */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/60">
+        <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 bg-slate-50/60">
           {!user ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
               <MessageSquare className="w-12 h-12 text-slate-300" />
@@ -333,14 +393,43 @@ export default function ChatModal({
             <>
               {messages.map((msg) => {
                 const isMe = msg.sender_id === user.id;
+                const isMsgFromSeller = msg.sender_role === 'seller' || (conversation && msg.sender_id === conversation.seller_user_id);
+                const msgAvatar = isMsgFromSeller
+                  ? (msg.sender_avatar || conversation?.seller_logo || targetFarmLogo || (isMe && user?.sellerProfile?.logo_image_url))
+                  : (msg.sender_avatar || conversation?.buyer_avatar || targetBuyerAvatar || (isMe && user?.avatar_url));
+                const msgSenderName = isMsgFromSeller
+                  ? (conversation?.farm_name || farmName || msg.sender_name || (lang === 'bn' ? 'খামার' : 'Farm'))
+                  : (conversation?.buyer_name || buyerName || msg.sender_name || (lang === 'bn' ? 'ক্রেতা' : 'Buyer'));
+
                 return (
                   <div
                     key={msg.id}
                     className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}
                   >
+                    {/* Incoming sender avatar (Left) */}
                     {!isMe && (
-                      <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mb-1">
-                        {msg.sender_name ? msg.sender_name.charAt(0) : 'F'}
+                      <div
+                        className={`w-8 h-8 flex items-center justify-center text-[10px] font-bold shrink-0 mb-1 overflow-hidden shadow-2xs border ${
+                          isMsgFromSeller 
+                            ? 'rounded-2xl bg-emerald-50 text-emerald-800 border-emerald-300' 
+                            : 'rounded-full bg-blue-50 text-blue-800 border-blue-200'
+                        }`}
+                        title={`${msgSenderName} (${isMsgFromSeller ? (lang === 'bn' ? 'ফার্ম লোগো' : 'Farm Logo') : (lang === 'bn' ? 'ক্রেতার ছবি' : 'Buyer Photo')})`}
+                      >
+                        {msgAvatar ? (
+                          <img
+                            src={msgAvatar}
+                            alt={msgSenderName}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : isMsgFromSeller ? (
+                          <Sprout className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <User className="w-4 h-4 text-blue-600" />
+                        )}
                       </div>
                     )}
 
@@ -351,6 +440,20 @@ export default function ChatModal({
                           : 'bg-white text-slate-800 border border-slate-200 rounded-bl-xs'
                       }`}
                     >
+                      {!isMe && (
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`text-[10px] font-black tracking-wide ${isMsgFromSeller ? 'text-emerald-700' : 'text-blue-700'}`}>
+                            {msgSenderName}
+                          </span>
+                          <span className={`text-[8px] px-1 py-0.2 rounded-xs font-bold inline-flex items-center gap-0.5 ${
+                            isMsgFromSeller ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {isMsgFromSeller ? <Sprout className="w-2.5 h-2.5 text-emerald-700" /> : <User className="w-2.5 h-2.5 text-blue-700" />}
+                            {isMsgFromSeller ? (lang === 'bn' ? 'খামার' : 'Farm') : (lang === 'bn' ? 'ক্রেতা' : 'Buyer')}
+                          </span>
+                        </div>
+                      )}
+
                       <p className="break-words whitespace-pre-wrap">{msg.content}</p>
                       <div
                         className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${
@@ -368,12 +471,39 @@ export default function ChatModal({
                             {msg.is_read ? (
                               <CheckCheck className="w-3 h-3 text-emerald-300 inline" />
                             ) : (
-                              <Check className="w-3 h-3 text-emerald-300/80 inline" />
+                              <Check className="w-3.5 h-3.5 text-emerald-300/80 inline" />
                             )}
                           </span>
                         )}
                       </div>
                     </div>
+
+                    {/* Outgoing current user avatar (Right) */}
+                    {isMe && (
+                      <div
+                        className={`w-8 h-8 flex items-center justify-center text-[10px] font-bold shrink-0 mb-1 overflow-hidden shadow-2xs border ${
+                          isMsgFromSeller 
+                            ? 'rounded-2xl bg-emerald-100 text-emerald-800 border-emerald-300' 
+                            : 'rounded-full bg-blue-50 text-blue-800 border-blue-200'
+                        }`}
+                        title={isMsgFromSeller ? (lang === 'bn' ? 'আপনার ফার্ম লোগো' : 'Your Farm Logo') : (lang === 'bn' ? 'আপনার প্রোফাইল ছবি' : 'Your Profile Picture')}
+                      >
+                        {msgAvatar ? (
+                          <img
+                            src={msgAvatar}
+                            alt={msgSenderName}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        ) : isMsgFromSeller ? (
+                          <Sprout className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <User className="w-4 h-4 text-blue-600" />
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -390,27 +520,47 @@ export default function ChatModal({
           )}
         </div>
 
+        {/* Quick Reply Shortcuts */}
+        {user && (
+          <div className="px-4 py-2 bg-white/95 border-t border-slate-100 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+            <span className="text-[10px] font-black uppercase text-slate-400 shrink-0">
+              {lang === 'bn' ? 'দ্রুত প্রশ্ন:' : 'Quick:'}
+            </span>
+            {quickReplies.map((q, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleSendMessage(undefined, lang === 'bn' ? q.bn : q.en)}
+                className="px-3 py-1 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-900 text-[11px] font-medium border border-slate-200 transition-all shrink-0 cursor-pointer"
+              >
+                {lang === 'bn' ? q.bn : q.en}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* 4. Input Area */}
         {user && (
           <form
-            onSubmit={handleSendMessage}
-            className="p-3 bg-white border-t border-slate-200 flex items-center gap-2 shrink-0"
+            onSubmit={(e) => handleSendMessage(e)}
+            className="p-3 sm:p-4 bg-white border-t border-slate-200 flex items-center gap-2 sm:gap-3 shrink-0"
           >
             <input
               type="text"
               value={inputText}
               onChange={handleInputChange}
-              placeholder={lang === 'bn' ? 'বার্তা লিখুন...' : 'Type your message...'}
+              placeholder={lang === 'bn' ? 'আপনার বার্তা বা প্রস্তাব লিখুন...' : 'Type your message or price offer...'}
               disabled={loading || sending}
-              className="flex-1 px-4 py-2.5 rounded-2xl bg-slate-100 border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all disabled:opacity-50"
+              className="flex-1 px-4 sm:px-5 py-3 rounded-2xl bg-slate-100 border border-slate-200 text-xs sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={!inputText.trim() || sending}
-              className="p-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer"
+              className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
               title={lang === 'bn' ? 'পাঠান' : 'Send'}
             >
               <Send className="w-4 h-4" />
+              <span className="hidden sm:inline">{lang === 'bn' ? 'পাঠান' : 'Send'}</span>
             </button>
           </form>
         )}

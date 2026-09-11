@@ -3,13 +3,15 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
-import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package, Layers, Truck, PlusCircle, Wallet, MessageSquare, ShieldAlert } from 'lucide-react';
+import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package, Layers, Truck, PlusCircle, Wallet, MessageSquare, ShieldAlert, User } from 'lucide-react';
+import { useSocket } from '../context/SocketContext';
 import NotificationBell from './NotificationBell';
 
 export default function Navbar() {
   const { user, logoutUser } = useAuth();
   const { lang, toggleLanguage, t } = useLanguage();
   const { totalItemsCount } = useCart();
+  const { unreadMessageCount } = useSocket();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [divisionDropdownOpen, setDivisionDropdownOpen] = useState(false);
@@ -137,6 +139,11 @@ export default function Navbar() {
                 title={lang === 'bn' ? 'বার্তা ও লাইভ চ্যাট' : 'Messages & Chat'}
               >
                 <MessageSquare className="w-5 h-5" />
+                {unreadMessageCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center ring-2 ring-white shadow-sm animate-pulse">
+                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                  </span>
+                )}
               </Link>
             )}
 
@@ -157,8 +164,19 @@ export default function Navbar() {
                   onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                   className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-all text-emerald-900 font-semibold text-sm cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
-                    {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+                  <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-xs overflow-hidden border border-emerald-300 shrink-0">
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt={user.fullName}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'
+                    )}
                   </div>
                   <div className="text-left">
                     <span className="block text-xs font-bold leading-tight">{user.fullName}</span>
@@ -179,6 +197,14 @@ export default function Navbar() {
                     {/* Buyer Dashboard Links */}
                     {user.role === 'buyer' && (
                       <>
+                        <Link
+                          to="/account/profile"
+                          className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-bold"
+                          onClick={() => setUserDropdownOpen(false)}
+                        >
+                          <User className="w-4 h-4 text-emerald-600" />
+                          {lang === 'bn' ? 'প্রোফাইল ও সেটিংস' : 'Profile & Settings'}
+                        </Link>
                         <Link
                           to="/account/orders"
                           className="flex items-center gap-2 px-4 py-2 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 font-medium"
@@ -312,6 +338,20 @@ export default function Navbar() {
           {/* Mobile menu toggle & alerts */}
           <div className="flex md:hidden items-center gap-2">
             <NotificationBell />
+            {user && (
+              <Link
+                to="/messages"
+                className="relative p-2 rounded-xl bg-slate-100 text-slate-700 hover:text-emerald-800 transition-colors"
+                title={lang === 'bn' ? 'বার্তা' : 'Messages'}
+              >
+                <MessageSquare className="w-5 h-5" />
+                {unreadMessageCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-[10px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-pulse">
+                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                  </span>
+                )}
+              </Link>
+            )}
             <button
               onClick={() => toggleLanguage()}
               className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-emerald-100 text-slate-700 hover:text-emerald-800 text-xs font-bold border border-slate-200 cursor-pointer transition-colors"
@@ -352,13 +392,29 @@ export default function Navbar() {
             <div className="pt-2 space-y-2 border-t border-slate-100">
               <div className="text-xs font-bold text-emerald-800">লগইন: {user.fullName}</div>
 
+              {user.role === 'buyer' && (
+                <NavLink
+                  to="/account/profile"
+                  className={mobileNavLinkStyle}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <User className="w-4 h-4 text-emerald-600" />
+                  <span>{lang === 'bn' ? 'প্রোফাইল ও সেটিংস' : 'Profile & Settings'}</span>
+                </NavLink>
+              )}
+
               <NavLink
                 to="/messages"
                 className={mobileNavLinkStyle}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <MessageSquare className="w-4 h-4 text-emerald-600" />
-                <span>{lang === 'bn' ? 'বার্তা ও সরাসরি চ্যাট' : 'Messages & Live Chat'}</span>
+                <span className="flex-1">{lang === 'bn' ? 'বার্তা ও সরাসরি চ্যাট' : 'Messages & Live Chat'}</span>
+                {unreadMessageCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black shadow-xs">
+                    {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                  </span>
+                )}
               </NavLink>
 
               {user.role === 'admin' && (

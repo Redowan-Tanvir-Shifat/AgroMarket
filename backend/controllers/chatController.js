@@ -26,12 +26,16 @@ export const getConversations = async (req, res) => {
         s.farm_name,
         s.user_id AS seller_user_id,
         s.logo_image_url AS seller_logo,
+        s.logo_image_url AS farm_logo,
+        s.logo_image_url AS logo_image_url,
         s.owner_image_url AS seller_owner_image,
         su.full_name AS seller_name,
+        su.phone AS seller_phone,
         -- Product details (if chat started from produce)
-        p.title_en AS product_title_en,
+        p.title AS product_title_en,
+        p.title AS product_title,
         p.title_bn AS product_title_bn,
-        p.price_bdt AS product_price,
+        p.base_price_bdt AS product_price,
         p.unit AS product_unit,
         p.image_url AS product_image,
         -- Last message
@@ -75,6 +79,37 @@ export const getConversations = async (req, res) => {
 };
 
 /**
+ * @desc Get total unread message count for the authenticated user across all conversations
+ * @route GET /api/chat/unread-count
+ */
+export const getUnreadMessageCount = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const query = `
+      SELECT COUNT(*) AS unread_count
+      FROM messages m
+      JOIN conversations c ON m.conversation_id = c.id
+      JOIN sellers s ON c.seller_id = s.id
+      WHERE m.is_read = 0
+        AND m.sender_id != ?
+        AND (c.buyer_id = ? OR s.user_id = ?)
+    `;
+
+    const [rows] = await pool.query(query, [userId, userId, userId]);
+    const unreadCount = rows[0]?.unread_count || 0;
+
+    return res.json({
+      success: true,
+      unreadCount
+    });
+  } catch (err) {
+    console.error('Error fetching unread message count:', err);
+    return res.status(500).json({ message: 'Failed to fetch unread message count', error: err.message });
+  }
+};
+
+/**
  * @desc Start or get existing conversation between buyer & seller
  * @route POST /api/chat/start
  */
@@ -84,21 +119,21 @@ export const startConversation = async (req, res) => {
     let { seller_id, buyer_id, product_id, initial_message } = req.body;
 
     let resolvedBuyerId = null;
-    let resolvedSellerId = seller_id ? parseInt(seller_id) : null;
+    let resolvedSellerId = null;
 
     if (buyer_id && parseInt(buyer_id) !== currentUserId) {
       // Current user is a seller initiating chat with a buyer
       resolvedBuyerId = parseInt(buyer_id);
-      if (!resolvedSellerId) {
-        resolvedSellerId = req.user.sellerProfile?.id;
-      }
-      if (!resolvedSellerId) {
-        const [sRows] = await pool.query('SELECT id FROM sellers WHERE user_id = ?', [currentUserId]);
-        if (sRows.length > 0) resolvedSellerId = sRows[0].id;
+      const [sRows] = await pool.query('SELECT id FROM sellers WHERE user_id = ?', [currentUserId]);
+      if (sRows.length > 0) {
+        resolvedSellerId = sRows[0].id;
+      } else if (req.user.sellerProfile?.id) {
+        resolvedSellerId = req.user.sellerProfile.id;
       }
     } else {
       // Current user is a buyer initiating chat with a seller
       resolvedBuyerId = currentUserId;
+      resolvedSellerId = seller_id ? parseInt(seller_id) : null;
     }
 
     // Resolve seller_id from product if not explicitly given
@@ -117,7 +152,7 @@ export const startConversation = async (req, res) => {
     }
 
     // Check if seller exists and prevent self-chat
-    const [sellers] = await pool.query('SELECT id, user_id, farm_name FROM sellers WHERE id = ?', [resolvedSellerId]);
+    const [sellers] = await pool.query('SELECT id, user_id, farm_name, logo_image_url, owner_image_url FROM sellers WHERE id = ?', [resolvedSellerId]);
     if (sellers.length === 0) {
       return res.status(404).json({ message: 'Farmer storefront not found' });
     }
@@ -144,16 +179,37 @@ export const startConversation = async (req, res) => {
         await pool.query('UPDATE conversations SET product_id = ? WHERE id = ?', [product_id, conversationId]);
       }
     } else {
-      const [insertRes] = await pool.query(
-        `INSERT INTO conversations (buyer_id, seller_id, product_id, last_message_at, created_at)
-         VALUES (?, ?, ?, NOW(), NOW())`,
-        [resolvedBuyerId, resolvedSellerId, product_id || null]
-      );
-      conversationId = insertRes.insertId;
+      try {
+        const [insertRes] = await pool.query(
+          `INSERT INTO conversations (buyer_id, seller_id, product_id, last_message_at, created_at)
+           VALUES (?, ?, ?, NOW(), NOW())`,
+          [resolvedBuyerId, resolvedSellerId, product_id || null]
+        );
+        conversationId = insertRes.insertId;
+      } catch (insertErr) {
+        // Gracefully resolve if created in a concurrent race condition
+        const [existingAfter] = await pool.query(
+          `SELECT id FROM conversations WHERE buyer_id = ? AND seller_id = ? LIMIT 1`,
+          [resolvedBuyerId, resolvedSellerId]
+        );
+        if (existingAfter.length > 0) {
+          conversationId = existingAfter[0].id;
+          if (product_id) {
+            await pool.query('UPDATE conversations SET product_id = ? WHERE id = ?', [product_id, conversationId]);
+          }
+        } else {
+          throw insertErr;
+        }
+      }
     }
 
-    const senderRole = currentUserId === seller.user_id ? 'seller' : 'buyer';
-    const recipientUserId = currentUserId === seller.user_id ? resolvedBuyerId : seller.user_id;
+    const isSeller = currentUserId === seller.user_id;
+    const senderRole = isSeller ? 'seller' : 'buyer';
+    const recipientUserId = isSeller ? resolvedBuyerId : seller.user_id;
+    const senderName = isSeller ? (seller.farm_name || req.user.full_name) : req.user.full_name;
+    const senderAvatar = isSeller
+      ? (seller.logo_image_url || seller.owner_image_url || req.user.avatar_url)
+      : (req.user.avatar_url || null);
 
     // If an initial message was provided, send it
     if (initial_message && initial_message.trim()) {
@@ -172,20 +228,21 @@ export const startConversation = async (req, res) => {
         conversation_id: conversationId,
         sender_id: currentUserId,
         sender_role: senderRole,
-        sender_name: req.user.full_name,
+        sender_name: senderName,
+        sender_avatar: senderAvatar,
         content,
         is_read: 0,
         created_at: new Date().toISOString()
       };
       emitToConversation(conversationId, 'new_message', msgObj);
 
-      // Trigger notification for recipient
+      // Trigger notification for recipient (English by default, Bangla in title_bn)
       await createNotificationRecord({
         userId: recipientUserId,
         sellerId: senderRole === 'buyer' ? seller.id : null,
         type: 'CHAT',
-        title: `নতুন বার্তা: ${req.user.full_name}`,
-        title_bn: `নতুন বার্তা: ${req.user.full_name}`,
+        title: `New message from ${senderName}`,
+        title_bn: `নতুন বার্তা: ${senderName}`,
         message: content.length > 90 ? `${content.slice(0, 90)}...` : content,
         message_bn: content.length > 90 ? `${content.slice(0, 90)}...` : content,
         link: `/messages?conversationId=${conversationId}`
@@ -221,11 +278,15 @@ export const getMessages = async (req, res) => {
         s.farm_name,
         s.user_id AS seller_user_id,
         s.logo_image_url AS seller_logo,
+        s.logo_image_url AS farm_logo,
+        s.logo_image_url AS logo_image_url,
         s.owner_image_url AS seller_owner_image,
         su.full_name AS seller_name,
-        p.title_en AS product_title_en,
+        su.phone AS seller_phone,
+        p.title AS product_title_en,
+        p.title AS product_title,
         p.title_bn AS product_title_bn,
-        p.price_bdt AS product_price,
+        p.base_price_bdt AS product_price,
         p.unit AS product_unit,
         p.image_url AS product_image
        FROM conversations c
@@ -246,11 +307,20 @@ export const getMessages = async (req, res) => {
       return res.status(403).json({ message: 'Unauthorized to view this conversation' });
     }
 
-    // Retrieve messages
+    // Retrieve messages with appropriate avatars (Farm logo for seller, profile avatar for buyer)
     const [messages] = await pool.query(
-      `SELECT m.*, u.full_name AS sender_name, u.avatar_url AS sender_avatar
+      `SELECT 
+        m.*, 
+        u.full_name AS sender_name,
+        CASE 
+          WHEN m.sender_role = 'seller' THEN COALESCE(s.logo_image_url, s.owner_image_url, u.avatar_url)
+          ELSE u.avatar_url 
+        END AS sender_avatar,
+        s.farm_name AS sender_farm_name,
+        s.logo_image_url AS sender_farm_logo
        FROM messages m
        JOIN users u ON m.sender_id = u.id
+       LEFT JOIN sellers s ON s.user_id = u.id
        WHERE m.conversation_id = ?
        ORDER BY m.created_at ASC`,
       [conversationId]
@@ -263,10 +333,22 @@ export const getMessages = async (req, res) => {
       [conversationId, userId]
     );
 
+    // Mark chat notifications for this conversation as read
+    await pool.query(
+      `UPDATE notifications SET is_read = 1 
+       WHERE user_id = ? AND type = 'CHAT' AND link LIKE ? AND is_read = 0`,
+      [userId, `%conversationId=${conversationId}%`]
+    );
+
     // Notify room that messages were marked read
     emitToConversation(conversationId, 'messages_read', {
       conversationId: parseInt(conversationId),
       readByUserId: userId
+    });
+
+    // Notify user directly to update unread badge
+    emitToUser(userId, 'messages_read', {
+      conversationId: parseInt(conversationId)
     });
 
     return res.json({
@@ -299,10 +381,14 @@ export const sendMessage = async (req, res) => {
       `SELECT 
         c.*,
         bu.full_name AS buyer_name,
+        bu.avatar_url AS buyer_avatar,
         s.farm_name,
         s.id AS seller_farm_id,
         s.user_id AS seller_user_id,
-        su.full_name AS seller_name
+        s.logo_image_url AS seller_logo,
+        s.owner_image_url AS seller_owner_image,
+        su.full_name AS seller_name,
+        su.avatar_url AS seller_user_avatar
        FROM conversations c
        JOIN users bu ON c.buyer_id = bu.id
        JOIN sellers s ON c.seller_id = s.id
@@ -324,6 +410,9 @@ export const sendMessage = async (req, res) => {
     const senderRole = isBuyer ? 'buyer' : 'seller';
     const recipientUserId = isBuyer ? conv.seller_user_id : conv.buyer_id;
     const senderName = isBuyer ? conv.buyer_name : (conv.farm_name || conv.seller_name);
+    const senderAvatar = isBuyer
+      ? conv.buyer_avatar
+      : (conv.seller_logo || conv.seller_owner_image || conv.seller_user_avatar);
 
     // Insert message
     const [msgRes] = await pool.query(
@@ -341,6 +430,7 @@ export const sendMessage = async (req, res) => {
       sender_id: userId,
       sender_role: senderRole,
       sender_name: senderName,
+      sender_avatar: senderAvatar,
       content: content.trim(),
       is_read: 0,
       created_at: new Date().toISOString()
@@ -355,12 +445,13 @@ export const sendMessage = async (req, res) => {
       senderName,
       content: content.slice(0, 100)
     });
+    emitToUser(recipientUserId, 'new_chat_message', messagePayload);
 
-    // 3. Persistent notification for recipient
+    // 3. Persistent notification for recipient (English by default, Bangla in title_bn)
     await createNotificationRecord({
       userId: recipientUserId,
       type: 'CHAT',
-      title: `নতুন বার্তা: ${senderName}`,
+      title: `New message from ${senderName}`,
       title_bn: `নতুন বার্তা: ${senderName}`,
       message: content.length > 90 ? `${content.slice(0, 90)}...` : content,
       message_bn: content.length > 90 ? `${content.slice(0, 90)}...` : content,

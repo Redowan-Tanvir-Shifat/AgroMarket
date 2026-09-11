@@ -69,8 +69,16 @@ export const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  const updateUser = (newUserData) => {
+    setUser((prev) => {
+      const merged = { ...prev, ...newUserData };
+      localStorage.setItem('agromarket_user', JSON.stringify(merged));
+      return merged;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, loginUser, registerUser, logoutUser }}>
+    <AuthContext.Provider value={{ user, token, loading, loginUser, registerUser, logoutUser, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

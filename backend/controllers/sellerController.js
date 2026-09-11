@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { createNotificationRecord } from './notificationController.js';
+import { broadcastEvent, emitToUser } from '../socket/socketManager.js';
 
 // Helper to format datetime strings cleanly for MySQL TIMESTAMPDIFF calculations
 const formatDbDatetime = (dt) => {
@@ -261,20 +262,34 @@ export const getSellerDashboardStats = async (req, res) => {
       };
     });
 
-    const monthlyTrends = [
-      { ym: '2026-04', month: 'Apr', labelBn: 'এপ্রিল' },
-      { ym: '2026-05', month: 'May', labelBn: 'মে' },
-      { ym: '2026-06', month: 'Jun', labelBn: 'জুন' },
-      { ym: '2026-07', month: 'Jul', labelBn: 'জুলাই' },
-      { ym: '2026-08', month: 'Aug', labelBn: 'আগস্ট' },
-      { ym: '2026-09', month: 'Sep', labelBn: 'সেপ্টেম্বর', isCurrent: true }
-    ].map(m => ({
-      ...m,
-      revenue: monthMap[m.ym]?.revenue || 0,
-      orders: monthMap[m.ym]?.orders || 0
-    }));
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    const toBnNum = (str) => String(str).split('').map(d => bnDigits[d] || d).join('');
+    const enMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const bnMonthsFull = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
+    const enMonthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const bnMonthsShort = ['জানু', 'ফেব্রু', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টে', 'অক্টো', 'নভে', 'ডিসে'];
 
-    // 12. Business Insights: Real Daily Sales (Last 7 Days)
+    const today = new Date();
+
+    // Dynamically build last 6 calendar months ending with current month
+    const monthlyTrends = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const ymStr = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+      const mIdx = d.getMonth();
+
+      monthlyTrends.push({
+        ym: ymStr,
+        month: enMonths[mIdx],
+        labelBn: bnMonthsFull[mIdx],
+        isCurrent: i === 0,
+        revenue: monthMap[ymStr]?.revenue || 0,
+        orders: monthMap[ymStr]?.orders || 0
+      });
+    }
+
+    // 12. Business Insights: Real Daily Sales (Last 7 Days Ending Today)
     const [dailyDbRes] = await pool.query(
       `SELECT 
          DATE_FORMAT(o.created_at, '%Y-%m-%d') as order_date,
@@ -295,19 +310,26 @@ export const getSellerDashboardStats = async (req, res) => {
       };
     });
 
-    const dailyTrends = [
-      { date: '2026-09-04', label: '04 Sep', labelBn: '০৪ সেপ' },
-      { date: '2026-09-05', label: '05 Sep', labelBn: '০৫ সেপ' },
-      { date: '2026-09-06', label: '06 Sep', labelBn: '০৬ সেপ' },
-      { date: '2026-09-07', label: '07 Sep', labelBn: '০৭ সেপ' },
-      { date: '2026-09-08', label: '08 Sep', labelBn: '০৮ সেপ' },
-      { date: '2026-09-09', label: '09 Sep', labelBn: '০৯ সেপ' },
-      { date: '2026-09-10', label: '10 Sep', labelBn: '১০ সেপ', isCurrent: true }
-    ].map(d => ({
-      ...d,
-      revenue: dayMap[d.date]?.revenue || 0,
-      orders: dayMap[d.date]?.orders || 0
-    }));
+    // Dynamically generate the past 7 days ending TODAY
+    const dailyTrends = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = pad2(d.getMonth() + 1);
+      const dd = pad2(d.getDate());
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      const mIdx = d.getMonth();
+
+      dailyTrends.push({
+        date: dateStr,
+        label: `${dd} ${enMonthsShort[mIdx]}`,
+        labelBn: `${toBnNum(dd)} ${bnMonthsShort[mIdx]}`,
+        isCurrent: i === 0,
+        revenue: dayMap[dateStr]?.revenue || 0,
+        orders: dayMap[dateStr]?.orders || 0
+      });
+    }
+
 
     return res.json({
       seller,
@@ -616,9 +638,19 @@ export const updateProductStock = async (req, res) => {
     // Get updated stock
     const [updated] = await pool.query('SELECT stock_quantity FROM products WHERE id = ?', [id]);
 
+    const newStock = updated[0]?.stock_quantity;
+    try {
+      broadcastEvent('produce_stock_updated', {
+        productId: parseInt(id),
+        newStock
+      });
+    } catch (sockErr) {
+      console.error('Non-blocking socket error:', sockErr);
+    }
+
     return res.json({
       message: 'স্টক সফলভাবে আপডেট হয়েছে (Stock updated)',
-      newStock: updated[0]?.stock_quantity
+      newStock
     });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update stock', error: err.message });
@@ -804,6 +836,21 @@ export const updateSellerOrderStatus = async (req, res) => {
           message_bn,
           link: '/account/orders'
         });
+
+        // Direct real-time socket events for buyer & platform
+        try {
+          emitToUser(order.buyer_id, 'order_status_updated', {
+            orderId: parseInt(id),
+            orderNumber: order.order_number,
+            status
+          });
+          broadcastEvent('order_status_updated', {
+            orderId: parseInt(id),
+            status
+          });
+        } catch (sockErr) {
+          console.error('Non-blocking socket event error:', sockErr);
+        }
       }
     } catch (notifErr) {
       console.error('Non-blocking error dispatching buyer status notification:', notifErr);

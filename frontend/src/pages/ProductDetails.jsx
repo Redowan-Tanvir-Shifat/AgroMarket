@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import FreshnessBadge from '../components/FreshnessBadge';
 import FarmerIdentityModal from '../components/FarmerIdentityModal';
 import ChatModal from '../components/ChatModal';
@@ -43,6 +44,7 @@ export default function ProductDetails() {
   const { t, lang } = useLanguage();
   const { addToCart } = useCart();
   const { user } = useAuth();
+  const { socket } = useSocket();
 
   const [product, setProduct] = useState(null);
   const [reviews, setReviews] = useState([]);
@@ -76,6 +78,28 @@ export default function ProductDetails() {
   useEffect(() => {
     fetchProductDetails();
   }, [id]);
+
+  // Real-time produce stock update when purchases or seller adjustments occur
+  useEffect(() => {
+    if (!socket || !id) return;
+    const handleLiveStock = (payload) => {
+      const currentId = parseInt(id);
+      if (payload?.productId === currentId) {
+        if (payload.newStock !== undefined) {
+          setProduct((prev) => (prev ? { ...prev, stock_quantity: payload.newStock } : prev));
+        } else {
+          fetchProductDetails();
+        }
+      } else if (payload?.items?.some((it) => it.productId === currentId)) {
+        fetchProductDetails();
+      }
+    };
+
+    socket.on('produce_stock_updated', handleLiveStock);
+    return () => {
+      socket.off('produce_stock_updated', handleLiveStock);
+    };
+  }, [socket, id]);
 
   const fetchProductDetails = async () => {
     try {
@@ -1128,6 +1152,8 @@ export default function ProductDetails() {
         sellerId={product.seller_id}
         sellerName={product.seller?.farmer_name || product.farmer_name}
         farmName={product.farm_name}
+        farmLogo={product.seller?.logo_image_url || product.seller_logo}
+        farmerAvatar={product.seller?.owner_image_url || product.owner_image_url}
         productId={product.id}
         productTitle={lang === 'bn' ? (product.title_bn || product.title) : product.title}
         productImage={product.image_url}

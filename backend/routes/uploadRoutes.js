@@ -25,4 +25,7 @@ router.post('/farm-logo', handleMulterErrors(uploadSingleImage), uploadFarmLogo)
 // Upload single owner profile photo
 router.post('/owner-avatar', handleMulterErrors(uploadSingleImage), uploadOwnerAvatar);
 
+// Upload user profile photo (buyer or seller)
+router.post('/avatar', handleMulterErrors(uploadSingleImage), uploadOwnerAvatar);
+
 export default router;

@@ -13,7 +13,7 @@ export const verifyToken = async (req, res, next) => {
 
     // Fetch user from DB
     const [users] = await pool.query(
-      'SELECT id, full_name, email, phone, role, division, district, upazila, address FROM users WHERE id = ?',
+      'SELECT id, full_name, email, phone, role, division, district, upazila, address, avatar_url FROM users WHERE id = ?',
       [decoded.userId]
     );
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import { formatHarvestAge } from '../utils/formatters';
 import {
   Sprout,
@@ -25,6 +26,7 @@ import {
 export default function SellerInventory() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
+  const { socket } = useSocket();
 
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
@@ -46,6 +48,27 @@ export default function SellerInventory() {
   useEffect(() => {
     fetchInventory(selectedSellerId);
   }, [selectedSellerId]);
+
+  // Real-time automatic inventory update when orders arrive or stock changes
+  useEffect(() => {
+    if (!socket) return;
+    if (selectedSellerId) {
+      socket.emit('join_seller', selectedSellerId);
+    }
+    const handleLiveInventoryUpdate = () => {
+      fetchInventory(selectedSellerId);
+    };
+
+    socket.on('new_order_alert', handleLiveInventoryUpdate);
+    socket.on('produce_stock_updated', handleLiveInventoryUpdate);
+    socket.on('new_notification', handleLiveInventoryUpdate);
+
+    return () => {
+      socket.off('new_order_alert', handleLiveInventoryUpdate);
+      socket.off('produce_stock_updated', handleLiveInventoryUpdate);
+      socket.off('new_notification', handleLiveInventoryUpdate);
+    };
+  }, [socket, selectedSellerId]);
 
   const fetchInventory = async (sellerId) => {
     try {

@@ -786,6 +786,8 @@ export default function SellerOrders() {
                           onClick={() => setActiveChatBuyer({
                             buyerId: order.buyer_id || order.buyer_user_id,
                             buyerName: order.buyer_name,
+                            buyerAvatar: order.buyer_avatar,
+                            farmLogo: user?.sellerProfile?.logo_image_url,
                             productId: order.items?.[0]?.product_id,
                             productTitle: lang === 'bn' ? order.items?.[0]?.title_bn : order.items?.[0]?.title,
                             productImage: order.items?.[0]?.image_url,
@@ -1391,9 +1393,11 @@ export default function SellerOrders() {
         <ChatModal
           isOpen={Boolean(activeChatBuyer)}
           onClose={() => setActiveChatBuyer(null)}
-          sellerId={selectedSellerId || user?.sellerProfile?.id || 1}
+          sellerId={user?.sellerProfile?.id}
           buyerId={activeChatBuyer.buyerId}
           buyerName={activeChatBuyer.buyerName}
+          buyerAvatar={activeChatBuyer.buyerAvatar}
+          farmLogo={activeChatBuyer.farmLogo || user?.sellerProfile?.logo_image_url}
           productId={activeChatBuyer.productId}
           productTitle={activeChatBuyer.productTitle}
           productImage={activeChatBuyer.productImage}

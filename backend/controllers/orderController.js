@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 import { createNotificationRecord } from './notificationController.js';
+import { broadcastEvent, emitToUser, emitToSeller } from '../socket/socketManager.js';
 
 // @desc Create a new order with bKash/Nagad/Rocket/COD & Delivery vs Pickup
 // @route POST /api/orders
@@ -117,6 +118,17 @@ export const createOrder = async (req, res) => {
           link: '/account/orders'
         });
       }
+
+      // Broadcast real-time stock reduction and new order events across the entire application
+      broadcastEvent('produce_stock_updated', {
+        items: items.map((i) => ({ productId: i.id, quantity: Number(i.quantity) || 1 }))
+      });
+      broadcastEvent('new_order_placed', {
+        orderId,
+        orderNumber,
+        totalAmount,
+        buyerId
+      });
     } catch (notifErr) {
       console.error('Non-blocking error dispatching order notification:', notifErr);
     }

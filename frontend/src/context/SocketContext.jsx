@@ -12,6 +12,7 @@ export function SocketProvider({ children }) {
   const [onlineCount, setOnlineCount] = useState(1);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
   const [toastNotification, setToastNotification] = useState(null);
 
   // Synthesize a pleasant, modern chime with Web Audio API (zero audio file dependencies)
@@ -64,6 +65,26 @@ export function SocketProvider({ children }) {
       }
     } catch (err) {
       console.error('Failed to load notifications:', err);
+    }
+  }, [user]);
+
+  // Fetch unread messages count from backend
+  const fetchUnreadMessageCount = useCallback(async () => {
+    if (!user) {
+      setUnreadMessageCount(0);
+      return;
+    }
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+      const res = await axios.get('http://localhost:5000/api/chat/unread-count', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data?.success) {
+        setUnreadMessageCount(res.data.unreadCount || 0);
+      }
+    } catch (err) {
+      console.error('Failed to load unread message count:', err);
     }
   }, [user]);
 
@@ -143,10 +164,29 @@ export function SocketProvider({ children }) {
     };
 
     // Listen for live notifications (direct user channel)
-    s.on('new_notification', handleLiveNotification);
+    s.on('new_notification', (notif) => {
+      handleLiveNotification(notif);
+      if (notif?.type === 'CHAT') {
+        fetchUnreadMessageCount();
+      }
+    });
 
     // Listen for new order alerts (seller farm channel)
     s.on('new_order_alert', handleLiveNotification);
+
+    // Listen for live chat alerts and messages
+    s.on('chat_alert', () => {
+      fetchUnreadMessageCount();
+    });
+    s.on('new_chat_message', () => {
+      fetchUnreadMessageCount();
+    });
+    s.on('new_message', () => {
+      fetchUnreadMessageCount();
+    });
+    s.on('messages_read', () => {
+      fetchUnreadMessageCount();
+    });
 
     setSocket(s);
 
@@ -164,8 +204,9 @@ export function SocketProvider({ children }) {
         socket.emit('join_seller', sId);
       }
       fetchNotifications();
+      fetchUnreadMessageCount();
     }
-  }, [socket, isConnected, user, fetchNotifications]);
+  }, [socket, isConnected, user, fetchNotifications, fetchUnreadMessageCount]);
 
   return (
     <SocketContext.Provider
@@ -173,8 +214,11 @@ export function SocketProvider({ children }) {
         socket,
         isConnected,
         onlineCount,
+        onlineUsersCount: onlineCount,
         notifications,
         unreadCount,
+        unreadMessageCount,
+        fetchUnreadMessageCount,
         toastNotification,
         dismissToast: () => setToastNotification(null),
         fetchNotifications,

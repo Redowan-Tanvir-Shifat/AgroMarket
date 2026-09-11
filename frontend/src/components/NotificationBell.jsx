@@ -201,20 +201,26 @@ export default function NotificationBell() {
               toastNotification.title_bn?.includes('বাতিল') ||
               toastNotification.message_bn?.includes('বাতিল');
 
+            const isChat = toastNotification.type === 'CHAT';
+
             return (
               <div className="fixed top-6 right-6 z-50 max-w-md w-[calc(100%-3rem)] sm:w-auto animate-in slide-in-from-top-5 fade-in duration-300 pointer-events-auto">
                 <div
                   className={`p-4 sm:p-5 rounded-3xl shadow-2xl border-2 backdrop-blur-xl flex items-start gap-3.5 transition-all ${
                     isDanger
                       ? 'bg-white/95 border-rose-500 text-slate-900 shadow-rose-500/25 ring-4 ring-rose-500/10'
-                      : 'bg-white/95 border-emerald-500 text-slate-900 shadow-emerald-500/25 ring-4 ring-emerald-500/10'
+                      : isChat
+                        ? 'bg-white/95 border-purple-500 text-slate-900 shadow-purple-500/25 ring-4 ring-purple-500/10'
+                        : 'bg-white/95 border-emerald-500 text-slate-900 shadow-emerald-500/25 ring-4 ring-emerald-500/10'
                   }`}
                 >
                   <div
                     className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
                       isDanger
                         ? 'bg-rose-100 text-rose-700'
-                        : 'bg-emerald-100 text-emerald-700'
+                        : isChat
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-emerald-100 text-emerald-700'
                     }`}
                   >
                     {isDanger ? (
@@ -230,15 +236,19 @@ export default function NotificationBell() {
                         className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                           isDanger
                             ? 'text-rose-700 bg-rose-100/70'
-                            : 'text-emerald-700 bg-emerald-100/70'
+                            : isChat
+                              ? 'text-purple-700 bg-purple-100/80 border border-purple-200'
+                              : 'text-emerald-700 bg-emerald-100/70'
                         }`}
                       >
                         {isDanger
                           ? (lang === 'bn' ? 'অর্ডার বাতিল' : 'Order Alert')
-                          : (lang === 'bn' ? 'নতুন অ্যালার্ট' : 'Live Alert')}
+                          : isChat
+                            ? (lang === 'bn' ? 'নতুন বার্তা' : 'New Message')
+                            : (lang === 'bn' ? 'নতুন অ্যালার্ট' : 'Live Alert')}
                       </span>
                       {!isDanger && (
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <Sparkles className={`w-3.5 h-3.5 shrink-0 ${isChat ? 'text-purple-600' : 'text-emerald-600'}`} />
                       )}
                     </div>
 
@@ -267,10 +277,12 @@ export default function NotificationBell() {
                         className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1.5 rounded-xl mt-2.5 transition-all cursor-pointer shadow-2xs group ${
                           isDanger
                             ? 'text-rose-800 hover:text-rose-950 bg-rose-100/70 hover:bg-rose-200/80 border border-rose-300/80'
-                            : 'text-emerald-800 hover:text-emerald-950 bg-emerald-100/70 hover:bg-emerald-200/80 border border-emerald-300/80'
+                            : isChat
+                              ? 'text-purple-800 hover:text-purple-950 bg-purple-100/70 hover:bg-purple-200/80 border border-purple-300/80'
+                              : 'text-emerald-800 hover:text-emerald-950 bg-emerald-100/70 hover:bg-emerald-200/80 border border-emerald-300/80'
                         }`}
                       >
-                        <span>{lang === 'bn' ? 'বিস্তারিত দেখুন' : 'View Details'}</span>
+                        <span>{lang === 'bn' ? 'বার্তা দেখুন' : 'View Message'}</span>
                         <span className="group-hover:translate-x-0.5 transition-transform">→</span>
                       </button>
                     )}

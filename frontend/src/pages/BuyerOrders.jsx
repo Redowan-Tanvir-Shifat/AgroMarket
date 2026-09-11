@@ -638,15 +638,15 @@ export default function BuyerOrders() {
                     </div>
 
                     {/* Direct Call & Message Actions */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       {sellerInfo.phone && (
                         <a
                           href={`tel:${sellerInfo.phone}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs shadow-emerald-600/20 cursor-pointer"
-                          title={lang === 'bn' ? 'খামারিকে সরাসরি কল দিন' : 'Call Farmer Directly'}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                          title={lang === 'bn' ? 'খামারিকে কল দিন' : 'Call Farmer'}
                         >
-                          <Phone className="w-3.5 h-3.5 text-white" />
-                          <span>{lang === 'bn' ? 'খামারিকে কল' : 'Call Farmer'}</span>
+                          <Phone className="w-3 h-3 text-emerald-700" />
+                          <span>{lang === 'bn' ? 'কল দিন' : 'Call Farmer'}</span>
                         </a>
                       )}
 
@@ -657,6 +657,8 @@ export default function BuyerOrders() {
                             sellerId: sellerInfo.sellerId,
                             sellerName: sellerInfo.farmerName,
                             farmName: sellerInfo.farmName,
+                            farmLogo: sellerInfo.farmLogo || firstItem?.farm_logo || firstItem?.seller_logo,
+                            farmerAvatar: sellerInfo.farmerAvatar,
                             productId: firstItem?.product_id,
                             productTitle: lang === 'bn' && firstItem?.title_bn ? firstItem.title_bn : firstItem?.title,
                             productImage: firstItem?.image_url,
@@ -664,11 +666,11 @@ export default function BuyerOrders() {
                             productUnit: firstItem?.unit
                           })
                         }
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition-all shadow-xs shadow-purple-600/20 cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
                         title={lang === 'bn' ? 'খামারিকে মেসেজ পাঠান' : 'Message Farmer'}
                       >
-                        <MessageSquare className="w-3.5 h-3.5 text-white" />
-                        <span>{lang === 'bn' ? 'মেসেজ দিন' : 'Message Farmer'}</span>
+                        <MessageSquare className="w-3 h-3 text-purple-700" />
+                        <span>{lang === 'bn' ? 'মেসেজ' : 'Message'}</span>
                       </button>
                     </div>
                   </div>
@@ -1117,6 +1119,8 @@ export default function BuyerOrders() {
           sellerId={activeChatSeller.sellerId}
           sellerName={activeChatSeller.sellerName}
           farmName={activeChatSeller.farmName}
+          farmLogo={activeChatSeller.farmLogo}
+          farmerAvatar={activeChatSeller.farmerAvatar}
           productId={activeChatSeller.productId}
           productTitle={activeChatSeller.productTitle}
           productImage={activeChatSeller.productImage}

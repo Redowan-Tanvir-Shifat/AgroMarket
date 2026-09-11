@@ -113,6 +113,7 @@ export const register = async (req, res) => {
       district,
       upazila,
       address,
+      avatar_url: null,
       sellerProfile
     };
 
@@ -176,6 +177,7 @@ export const login = async (req, res) => {
       district: user.district,
       upazila: user.upazila,
       address: user.address,
+      avatar_url: user.avatar_url || null,
       sellerProfile
     };
 
@@ -194,8 +196,207 @@ export const login = async (req, res) => {
 // @route GET /api/auth/me
 export const getMe = async (req, res) => {
   try {
-    return res.json({ user: req.user });
+    const user = req.user;
+    const userObj = {
+      id: user.id,
+      fullName: user.full_name,
+      full_name: user.full_name,
+      email: user.email || '',
+      phone: user.phone,
+      role: user.role,
+      division: user.division,
+      district: user.district,
+      upazila: user.upazila,
+      address: user.address,
+      avatar_url: user.avatar_url || null,
+      sellerProfile: user.sellerProfile || null
+    };
+    return res.json({ user: userObj });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch user data.' });
   }
 };
+
+// @desc Update Profile (Name, Phone, Email, Location, Avatar)
+// @route PUT /api/auth/profile
+export const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      fullName,
+      email,
+      phone,
+      division,
+      district,
+      upazila,
+      address,
+      avatar_url
+    } = req.body;
+
+    if (!fullName || !fullName.trim()) {
+      return res.status(400).json({ message: 'Full name is required' });
+    }
+
+    // Check if phone is changed and already taken by another user
+    if (phone && phone.trim() !== req.user.phone) {
+      const [existingPhone] = await pool.query('SELECT id FROM users WHERE phone = ? AND id != ?', [phone.trim(), userId]);
+      if (existingPhone.length > 0) {
+        return res.status(400).json({ message: 'This phone number is already registered to another user' });
+      }
+    }
+
+    // Check if email is changed and already taken
+    if (email && email.trim() !== '' && email.trim() !== req.user.email) {
+      const [existingEmail] = await pool.query('SELECT id FROM users WHERE email = ? AND id != ?', [email.trim(), userId]);
+      if (existingEmail.length > 0) {
+        return res.status(400).json({ message: 'This email address is already registered to another user' });
+      }
+    }
+
+    await pool.query(
+      `UPDATE users SET 
+        full_name = ?,
+        email = ?,
+        phone = COALESCE(?, phone),
+        division = COALESCE(?, division),
+        district = COALESCE(?, district),
+        upazila = COALESCE(?, upazila),
+        address = COALESCE(?, address),
+        avatar_url = COALESCE(?, avatar_url)
+       WHERE id = ?`,
+      [
+        fullName.trim(),
+        email && email.trim() !== '' ? email.trim() : null,
+        phone ? phone.trim() : null,
+        division || null,
+        district || null,
+        upazila || null,
+        address || null,
+        avatar_url !== undefined ? avatar_url : null,
+        userId
+      ]
+    );
+
+    // Fetch refreshed user
+    const [updatedUsers] = await pool.query(
+      'SELECT id, full_name, email, phone, role, division, district, upazila, address, avatar_url FROM users WHERE id = ?',
+      [userId]
+    );
+
+    const updatedUser = updatedUsers[0];
+    let sellerProfile = null;
+    if (updatedUser.role === 'seller') {
+      const [sellers] = await pool.query('SELECT * FROM sellers WHERE user_id = ?', [userId]);
+      if (sellers.length > 0) {
+        sellerProfile = sellers[0];
+      }
+    }
+
+    const userObj = {
+      id: updatedUser.id,
+      fullName: updatedUser.full_name,
+      full_name: updatedUser.full_name,
+      email: updatedUser.email || '',
+      phone: updatedUser.phone,
+      role: updatedUser.role,
+      division: updatedUser.division,
+      district: updatedUser.district,
+      upazila: updatedUser.upazila,
+      address: updatedUser.address,
+      avatar_url: updatedUser.avatar_url,
+      sellerProfile
+    };
+
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully!',
+      user: userObj
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    return res.status(500).json({ message: 'Failed to update profile', error: err.message });
+  }
+};
+
+// @desc Change Password
+// @route PUT /api/auth/change-password
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters long' });
+    }
+
+    // Get current password hash
+    const [rows] = await pool.query('SELECT password_hash FROM users WHERE id = ?', [userId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, rows[0].password_hash);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Current password is incorrect' });
+    }
+
+    const hashedNew = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = ? WHERE id = ?', [hashedNew, userId]);
+
+    return res.json({
+      success: true,
+      message: 'Password changed successfully!'
+    });
+  } catch (err) {
+    console.error('Change password error:', err);
+    return res.status(500).json({ message: 'Failed to change password', error: err.message });
+  }
+};
+
+// @desc Get Buyer Profile Stats (Orders count, Wishlist count, Total spent)
+// @route GET /api/auth/buyer-stats
+export const getBuyerStats = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // Total orders count and spent amount (excluding cancelled orders from spent amount)
+    const [ordersCountRows] = await pool.query(
+      `SELECT 
+        COUNT(*) as total_orders, 
+        COALESCE(SUM(CASE WHEN order_status <> 'CANCELLED' THEN total_amount_bdt ELSE 0 END), 0) as total_spent 
+       FROM orders 
+       WHERE buyer_id = ? AND (deleted_by_buyer = 0 OR deleted_by_buyer IS NULL)`,
+      [userId]
+    );
+
+    // Wishlist count
+    const [wishlistRows] = await pool.query(
+      'SELECT COUNT(*) as total_wishlist FROM wishlists WHERE buyer_id = ?',
+      [userId]
+    );
+
+    const totalOrders = parseInt(ordersCountRows[0]?.total_orders, 10) || 0;
+    const totalSpent = Math.round((parseFloat(ordersCountRows[0]?.total_spent) || 0) * 100) / 100;
+    const totalWishlist = parseInt(wishlistRows[0]?.total_wishlist, 10) || 0;
+
+    return res.json({
+      success: true,
+      stats: {
+        totalOrders,
+        totalSpent,
+        totalWishlist
+      }
+    });
+  } catch (err) {
+    console.error('Buyer stats error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to fetch buyer stats', error: err.message });
+  }
+};
+

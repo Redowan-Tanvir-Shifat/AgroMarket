@@ -30,7 +30,7 @@ import {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const { isConnected, onlineUsersCount } = useSocket();
+  const { socket, isConnected, onlineUsersCount, onlineCount } = useSocket();
   const { lang, t } = useLanguage();
   const navigate = useNavigate();
 
@@ -91,6 +91,24 @@ export default function AdminDashboard() {
     }
     fetchAdminData();
   }, [user]);
+
+  // Real-time live platform data update on orders or status changes
+  useEffect(() => {
+    if (!socket) return;
+    const handlePlatformEvent = () => {
+      fetchAdminData();
+    };
+
+    socket.on('new_order_placed', handlePlatformEvent);
+    socket.on('order_status_updated', handlePlatformEvent);
+    socket.on('new_notification', handlePlatformEvent);
+
+    return () => {
+      socket.off('new_order_placed', handlePlatformEvent);
+      socket.off('order_status_updated', handlePlatformEvent);
+      socket.off('new_notification', handlePlatformEvent);
+    };
+  }, [socket]);
 
   // Handle Verify / Reject Seller
   const handleUpdateStatus = async (sellerId, newStatus, notes = '') => {

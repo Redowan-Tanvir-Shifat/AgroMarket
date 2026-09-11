@@ -122,7 +122,8 @@ The web application consists of **15 structured pages** and **2 global real-time
 ├── 🛒 BUYER PAGES (Protected: Role = Buyer)
 │   ├── 6. Cart & Checkout Page (`/checkout`) — Delivery vs Pickup + bKash/Nagad/Rocket/COD
 │   ├── 7. Buyer Dashboard & Order History (`/account/orders`) — Live Status Stepper & 1-Click Reorder
-│   └── 8. Wishlist & Produce Tracker (`/account/wishlist`) — Live Price Drop Tracker
+│   ├── 8. Wishlist & Produce Tracker (`/account/wishlist`) — Live Price Drop Tracker
+│   └── 9. Buyer Profile & Settings Hub (`/account/profile`) — Avatar Cloudinary CDN, Shipping Coordinates, Live Preview & Security
 │
 ├── 🚜 FARMER / SELLER PAGES (Protected: Role = Seller)
 │   ├── 9. Seller Dashboard & Analytics (`/seller/dashboard`) — Live Revenue ৳, Sales Bar Plot, Spoilage Prevented
@@ -248,7 +249,20 @@ Multi-role tab toggle at top: `🛒 Buyer Account (ক্রেতা অ্য�
 * **Features Covered:**
   * Grid of saved items with price change tracking badges in BDT.
 
-### 9. Seller Dashboard & Earnings (`/seller/dashboard`)
+### 9. Buyer Profile & Settings Hub (`/account/profile`)
+* **Purpose:** Centralized buyer identity hub, default shipping coordinates, and account security credentials.
+* **Design Parity:** Matches the Seller Profile & Settings page (`/seller/profile`) in aesthetics, cards, inputs, button styling, live preview, and post-save pop-up notification modal.
+* **Features Covered:**
+  * **Top Header & Hub Badge:** Pill badge (`ক্রেতা প্রোফাইল ও সেটিংস হাব / Buyer Profile & Settings Hub`) and main header.
+  * **Unified Dark-Emerald Buyer Overview Banner:** Lush gradient banner with Cloudinary avatar photo uploader, verified buyer badge (`যাচাইকৃত ক্রেতা`), phone, email, and division chips, plus live activity tiles (**Total Orders**, **Total Spent ৳**, **Saved Wishlist**) with live refresh.
+  * **Step 1: Personal Identity & Contact (`ধাপ ১`):** Full Name, Phone, Email, and Cloudinary photo management card with live preview, upload trigger, and remove option.
+  * **Step 2: Delivery & Shipping Address (`ধাপ ২`):** Bangladesh 8 divisions selector, District, Upazila / Area, and full street address with fast 1-click checkout benefit callout.
+  * **Step 3: Password & Account Security (`ধাপ ৩`):** Current password, new password, and confirmation with eye toggles and emerald green "Update Password" button matching profile save button.
+  * **Floating Pop-up Notification Toast (`actionNotice`):** Viewport-fixed toast (`fixed top-6 right-6 z-50`) with emerald checkmark, title, description, auto-dismiss, and inline `Saved!` confirmation badge.
+  * **Sticky Live Buyer Trust Preview:** Dark mirrored buyer profile card updating in real time as user edits the form.
+  * **AgroMarket Buyer Guarantee Card & Quick Navigation:** Trust guarantees and shortcuts to Orders, Wishlist, Chat, and Catalog.
+
+### 10. Seller Dashboard & Earnings (`/seller/dashboard`)
 * **Purpose:** Control panel for farmers.
 * **Features Covered:**
   * **Earnings Card (মোট আয়):** Total revenue earned in BDT (৳), gross sales, completed orders count.
@@ -747,32 +761,32 @@ timeline
 * Printable standard A4 Delivery Challan / Invoice modal.
 * Farm Profile & Settings Hub with dark-emerald verified partner overview.
 
-#### 🚀 Day 4: Real-Time Engine, Live Notifications, Buyer-Farmer Chat, Cloudinary & Admin Center (Planned)
-1. **Real-Time WebSocket Core (`Socket.io`)**:
-   * Install `socket.io` (backend) & `socket.io-client` (frontend).
-   * Connection management, user/seller room subscriptions, and auto-reconnect.
-2. **Global Notification Center (Both Buyer & Farmer)**:
-   * MySQL `notifications` table with read/unread tracking.
-   * Header bell icon with real-time badge count (`🔴`).
-   * Synthesized Web Audio API bell chime on arrival (pure code, zero external asset dependencies).
-   * Notification slide-out tray with time-ago formatting and direct links.
-   * Auto-triggers on Order Placement, Status Change, and Reviews.
-3. **Buyer ↔ Farmer Direct Live Chat**:
-   * MySQL `conversations` and `messages` tables.
-   * *"Chat with Farmer"* trigger on Product Details and Storefront pages.
-   * Messenger-style floating collapsible chat dock.
-   * Dedicated Seller Inquiries & Chat Hub (`/seller/messages`).
-   * Live message stream with instant socket push and typing indicator.
-4. **Cloudinary Media & Image Upload Engine (`cloudinary` + `multer`)**:
-   * Backend Cloudinary integration (`/api/upload/produce-image`, `/api/upload/farm-banner`).
-   * Drag-and-drop crop photo uploader in Add/Edit Crop form (`/seller/products/new`, `/seller/products/:id/edit`) with live preview, upload progress, and automatic WebP compression.
-   * Farm cover banner and verification document upload in Farm Profile (`/seller/profile`).
-   * Graceful fallback: handles preset selections and fallback URLs if Cloudinary API keys are not supplied.
-5. **Admin Master Center (`/admin/dashboard`)**:
-   * National GMV (৳), platform fee commission, active user metrics.
-   * District & Division Agricultural Supply Analytics visualization.
-   * Farmer Verification & Quality Moderation Hub (NID & Trade license audit).
-   * Automated Expired Produce Audit Log and Dispute Resolution.
+#### ✅ Day 4: Real-Time Engine, Live Notifications, Buyer-Farmer Chat, Trajectory Analytics & Buyer Profile Hub (Completed)
+1. **Real-Time WebSocket Core Across Platform (`Socket.io`)**:
+   * Installed and configured `socket.io` (backend) & `socket.io-client` (frontend).
+   * Connection authentication, user (`user_${id}`) and seller (`seller_${id}`) private room routing, and automatic reconnect.
+   * Multi-event propagation: `new_notification`, `order_status_updated`, `payment_status_updated`, `stock_updated`, `product_updated`, `price_aged`, `new_message`, `messages_read`.
+2. **Global Notification Center & Web Audio Chimes**:
+   * MySQL `notifications` table with read/unread status and entity linking.
+   * Header bell icon with animated unread badge counter stack.
+   * Synthesized Web Audio API chime on new arrival (zero external asset dependencies).
+   * Notification slide-out tray with time-ago relative formatting and direct navigation.
+3. **Buyer ↔ Farmer Direct Real-Time Chat & Inbox**:
+   * MySQL `conversations` and `messages` tables with unread tracking.
+   * Messenger-style floating collapsible chat dock on Product and Storefront pages.
+   * Dedicated Chat & Inquiries page (`/messages`) with responsive sidebar conversation list.
+   * Bottom typing input area container padding fix matching buyer & seller chat views.
+   * Smart message typography: current user's last message displays regular, while incoming last messages are bolded for clarity.
+   * Navbar Message icon dynamic unread count stack overlay updating in real time.
+4. **Dynamic 7-Day Sales Trajectory Trajectory**:
+   * Live sales trajectory bar chart dynamically calculated against current date (e.g. September 12 as current day), plotting exact revenue over the last 7 calendar days.
+5. **Buyer Profile & Account Settings Hub Complete Redesign (`/account/profile`)**:
+   * Upgraded to mirror `SellerProfile.jsx` layout, card geometry, inputs, buttons, and floating toast modals.
+   * Floating Pop-up Notification Toast (`actionNotice`) with auto-dismiss and tactile save confirmation.
+   * Unified dark-emerald buyer overview banner with Cloudinary avatar photo uploader and live KPI tiles.
+   * 3-Step Configuration Form: Step 1 (Personal Details & Avatar), Step 2 (Delivery Address & Bangladesh Divisions), Step 3 (Password & Security with emerald update button).
+   * Sticky Live Buyer Trust Preview Card updating in real time as the buyer types.
+   * AgroMarket Buyer Guarantee card and quick navigation shortcuts.
 
 #### 🎯 Day 5: Delivery Driver Portal, Polish, End-to-End Testing & Handover (Planned)
 1. **Logistics & Delivery Driver Hub (`/driver`)**:

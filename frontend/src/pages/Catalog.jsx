@@ -3,10 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import ProductCard from '../components/ProductCard';
 import { useLanguage } from '../context/LanguageContext';
+import { useSocket } from '../context/SocketContext';
 import { Search, Filter, RefreshCw, MapPin, SlidersHorizontal, Sprout } from 'lucide-react';
 
 export default function Catalog() {
   const { t, lang } = useLanguage();
+  const { socket } = useSocket();
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,18 @@ export default function Catalog() {
   useEffect(() => {
     fetchProducts();
   }, [searchParams]);
+
+  // Real-time catalog update when stock changes or new orders are placed
+  useEffect(() => {
+    if (!socket) return;
+    const handleStockChange = () => {
+      fetchProducts();
+    };
+    socket.on('produce_stock_updated', handleStockChange);
+    return () => {
+      socket.off('produce_stock_updated', handleStockChange);
+    };
+  }, [socket, searchParams]);
 
   const fetchProducts = async () => {
     try {

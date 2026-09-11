@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 import FarmHeaderBanner from '../components/FarmHeaderBanner';
 import {
   TrendingUp,
@@ -32,10 +33,10 @@ import {
 export default function SellerDashboard() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
-
-  const [loading, setLoading] = useState(true);
+  const { socket } = useSocket();
   const [data, setData] = useState(null);
-  const [searchParams] = useSearchParams();
+  const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
   const sellerIdParam = searchParams.get('sellerId');
   const [selectedSellerId, setSelectedSellerId] = useState(() => {
     if (sellerIdParam) {
@@ -67,6 +68,27 @@ export default function SellerDashboard() {
   useEffect(() => {
     fetchDashboardData(selectedSellerId);
   }, [selectedSellerId]);
+
+  // Live real-time dashboard sync on incoming orders, fulfillment updates, or notifications
+  useEffect(() => {
+    if (!socket) return;
+    if (selectedSellerId) {
+      socket.emit('join_seller', selectedSellerId);
+    }
+    const handleLiveDashboardUpdate = () => {
+      fetchDashboardData(selectedSellerId);
+    };
+
+    socket.on('new_order_alert', handleLiveDashboardUpdate);
+    socket.on('order_status_updated', handleLiveDashboardUpdate);
+    socket.on('new_notification', handleLiveDashboardUpdate);
+
+    return () => {
+      socket.off('new_order_alert', handleLiveDashboardUpdate);
+      socket.off('order_status_updated', handleLiveDashboardUpdate);
+      socket.off('new_notification', handleLiveDashboardUpdate);
+    };
+  }, [socket, selectedSellerId]);
 
   const fetchDashboardData = async (sellerId) => {
     try {
@@ -493,30 +515,47 @@ export default function SellerDashboard() {
                                     >
                                       {/* Tooltip on hover */}
                                       <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-slate-900 text-white text-[10px] font-bold py-1 px-2.5 rounded-lg shadow-xl text-center pointer-events-none mb-1 whitespace-nowrap z-30 absolute bottom-full">
-                                        <span className="block text-emerald-400 font-black">৳{rev.toLocaleString()}</span>
-                                        <span className="text-slate-300 font-normal">
+                                        <div className="flex items-center justify-center gap-1">
+                                          <span className="block text-emerald-400 font-black">৳{rev.toLocaleString()}</span>
+                                          {m.isCurrent && (
+                                            <span className="text-[9px] bg-emerald-500 text-slate-900 font-black px-1.5 py-0.2 rounded-full">
+                                              {lang === 'bn' ? 'আজ' : 'Today'}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="text-slate-300 font-normal block">
                                           {m.orders || 0} {lang === 'bn' ? 'টি অর্ডার' : 'orders'}
                                         </span>
                                       </div>
 
                                       {/* Consistent Header Zone Above Bar */}
                                       <div className="h-5 flex items-center justify-center mb-1 w-full pointer-events-none">
-                                        {!isZero && (
+                                        {!isZero ? (
                                           <span className="text-[9px] sm:text-[10px] font-extrabold text-emerald-800 truncate max-w-full">
                                             ৳{rev >= 1000 ? `${(rev/1000).toFixed(1)}k` : rev}
                                           </span>
-                                        )}
+                                        ) : m.isCurrent ? (
+                                          <span className="text-[8px] font-extrabold text-emerald-600 uppercase tracking-tighter">
+                                            {lang === 'bn' ? 'আজ' : 'Live'}
+                                          </span>
+                                        ) : null}
                                       </div>
 
                                       {/* Unified Vertical Bar Track Slot & Animated Bar */}
-                                      <div className="w-full max-w-[32px] sm:max-w-[44px] flex-1 flex flex-col justify-end items-center bg-slate-100/60 rounded-t-xl p-0.5 overflow-hidden">
+                                      <div className={`w-full max-w-[32px] sm:max-w-[44px] flex-1 flex flex-col justify-end items-center rounded-t-xl p-0.5 overflow-hidden transition-all ${
+                                        m.isCurrent
+                                          ? 'bg-emerald-50/80 border border-emerald-300/80 shadow-xs'
+                                          : 'bg-slate-100/60'
+                                      }`}>
                                         <div
                                           style={{
-                                            height: chartMounted ? (isZero ? '3px' : `${heightPercent}%`) : '3px'
+                                            height: chartMounted ? (isZero ? '4px' : `${heightPercent}%`) : '4px'
                                           }}
                                           className={`w-full rounded-t-lg transition-[height] duration-700 ease-out shadow-xs ${
                                             isZero
-                                              ? 'bg-slate-300/80'
+                                              ? m.isCurrent
+                                                ? 'bg-emerald-400/80 animate-pulse'
+                                                : 'bg-slate-300/80'
                                               : 'bg-gradient-to-t from-emerald-600 via-emerald-500 to-emerald-400 hover:from-emerald-700 hover:to-emerald-500'
                                           }`}
                                         />
@@ -529,10 +568,10 @@ export default function SellerDashboard() {
                             </div>
 
                             {/* X-Axis Day/Date Labels below Base Line */}
-                            <div className="flex items-center justify-between gap-1.5 sm:gap-3 px-1 sm:px-2 pt-2">
+                            <div className="flex items-start justify-between gap-1.5 sm:gap-3 px-1 sm:px-2 pt-2">
                               {activeList.map((m, idx) => (
-                                <div key={idx} className="flex-1 text-center">
-                                  <span className={`block text-[10px] sm:text-[11px] font-bold truncate ${
+                                <div key={idx} className="flex-1 text-center flex flex-col items-center">
+                                  <span className={`block text-[10px] sm:text-[11px] font-bold truncate w-full ${
                                     m.isCurrent
                                       ? 'text-emerald-700 font-black'
                                       : (m.revenue || 0) === 0
@@ -541,9 +580,20 @@ export default function SellerDashboard() {
                                   }`}>
                                     {lang === 'bn' ? (m.labelBn || m.month) : (m.label || m.month)}
                                   </span>
+                                  {m.isCurrent && trendMode === 'daily' && (
+                                    <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100/90 border border-emerald-300/80 px-1.5 py-0.2 rounded-full mt-0.5 leading-tight">
+                                      {lang === 'bn' ? 'আজ' : 'Today'}
+                                    </span>
+                                  )}
+                                  {m.isCurrent && trendMode === 'monthly' && (
+                                    <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100/90 border border-emerald-300/80 px-1.5 py-0.2 rounded-full mt-0.5 leading-tight">
+                                      {lang === 'bn' ? 'চলতি' : 'Current'}
+                                    </span>
+                                  )}
                                 </div>
                               ))}
                             </div>
+
 
                           </div>
                         </div>

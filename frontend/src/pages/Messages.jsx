@@ -10,6 +10,7 @@ import {
   Sprout,
   ShieldCheck,
   User,
+  Users,
   ArrowLeft,
   ExternalLink,
   Phone,
@@ -24,7 +25,7 @@ import {
 
 export default function Messages() {
   const { user } = useAuth();
-  const { socket, playNotificationChime, isConnected } = useSocket();
+  const { socket, playNotificationChime, isConnected, fetchUnreadMessageCount } = useSocket();
   const { lang, t } = useLanguage();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,16 +41,23 @@ export default function Messages() {
   const [sending, setSending] = useState(false);
   const [typingUser, setTypingUser] = useState(null);
 
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   // Quick reply suggestions for buyer / farmer negotiations
-  const quickReplies = [
-    { bn: 'দাম কি কিছুটা কমানো সম্ভব?', en: 'Is there any discount on bulk order?' },
-    { bn: 'আজকে পাঠালে কবে নাগাদ পাবো?', en: 'When can this be delivered?' },
-    { bn: 'ফসলটি কি একদম টাটকা?', en: 'How fresh is this harvest?' },
-    { bn: 'খামার থেকে সরাসরি পিকআপ করা যাবে?', en: 'Can I pick up directly from the farm?' }
-  ];
+  const quickReplies = user?.role === 'seller'
+    ? [
+        { bn: 'ফসল একদম তাজা ও প্রস্তুত আছে', en: 'Crop is 100% fresh & ready' },
+        { bn: 'আজই ডেলিভারির জন্য বুক করা যাবে', en: 'Can dispatch for delivery today' },
+        { bn: 'পাইকারি অর্ডারে বিশেষ মূল্যছাড় রয়েছে', en: 'Bulk order discount available' },
+        { bn: 'খামার থেকে সরাসরি সংগ্রহ করতে পারবেন', en: 'Farm pickup is available' }
+      ]
+    : [
+        { bn: 'দাম কি কিছুটা কমানো সম্ভব?', en: 'Is there any discount on bulk order?' },
+        { bn: 'আজকে পাঠালে কবে নাগাদ পাবো?', en: 'When can this be delivered?' },
+        { bn: 'ফসলটি কি একদম টাটকা?', en: 'How fresh is this harvest?' },
+        { bn: 'খামার থেকে সরাসরি পিকআপ করা যাবে?', en: 'Can I pick up directly from the farm?' }
+      ];
 
   // Fetch all user conversations
   const fetchConversations = async (selectFirst = false) => {
@@ -62,7 +70,16 @@ export default function Messages() {
       });
       if (!res.ok) throw new Error('Failed to fetch conversation list');
       const data = await res.json();
-      const list = data.conversations || [];
+      const rawList = data.conversations || [];
+      // Deduplicate by buyer-seller pair and by id
+      const seenPairs = new Set();
+      const list = rawList.filter((c) => {
+        const pairKey = `${c.buyer_id}-${c.seller_id}`;
+        if (seenPairs.has(pairKey) || seenPairs.has(c.id)) return false;
+        seenPairs.add(pairKey);
+        seenPairs.add(c.id);
+        return true;
+      });
       setConversations(list);
 
       // Handle query param or select first
@@ -114,6 +131,7 @@ export default function Messages() {
           if (res.ok) {
             const data = await res.json();
             setActiveConvId(data.conversationId);
+            setSearchParams({ conversationId: data.conversationId }, { replace: true });
             fetchConversations();
           }
         } catch (err) {
@@ -123,6 +141,17 @@ export default function Messages() {
       startChat();
     }
   }, [searchParams, user]);
+
+  // Synchronize active conversation when URL param changes (e.g. from notification clicks)
+  useEffect(() => {
+    const convId = searchParams.get('conversationId') || searchParams.get('id');
+    if (convId) {
+      const parsedId = parseInt(convId);
+      if (parsedId && parsedId !== activeConvId) {
+        setActiveConvId(parsedId);
+      }
+    }
+  }, [searchParams, activeConvId]);
 
   // Load messages whenever active conversation changes
   useEffect(() => {
@@ -143,10 +172,29 @@ export default function Messages() {
           setActiveConv(data.conversation);
           setMessages(data.messages || []);
 
-          // Clear unread count for this conversation in list
+          const lastMsg = (data.messages && data.messages.length > 0)
+            ? data.messages[data.messages.length - 1]
+            : null;
+
+          // Clear unread count and enrich this conversation in list with fresh data
           setConversations((prev) =>
-            prev.map((c) => (c.id === activeConvId ? { ...c, unread_count: 0 } : c))
+            prev.map((c) =>
+              c.id === activeConvId
+                ? {
+                    ...c,
+                    ...data.conversation,
+                    last_message_content: lastMsg ? lastMsg.content : c.last_message_content,
+                    last_message_sender_id: lastMsg ? lastMsg.sender_id : c.last_message_sender_id,
+                    last_message_time: lastMsg ? lastMsg.created_at : c.last_message_time,
+                    unread_count: 0
+                  }
+                : c
+            )
           );
+
+          if (fetchUnreadMessageCount) {
+            fetchUnreadMessageCount();
+          }
         }
       } catch (err) {
         console.error('Error loading messages:', err);
@@ -189,6 +237,7 @@ export default function Messages() {
               ...c,
               last_message_content: newMsg.content,
               last_message_time: newMsg.created_at,
+              last_message_sender_id: newMsg.sender_id,
               unread_count:
                 newMsg.conversation_id === activeConvId || newMsg.sender_id === user.id
                   ? 0
@@ -226,9 +275,14 @@ export default function Messages() {
     };
   }, [socket, activeConvId, user]);
 
-  // Auto scroll to bottom
+  // Auto scroll messages container to bottom (inside container ONLY, without scrolling browser window/page)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages, typingUser]);
 
   // Handle typing broadcast
@@ -283,7 +337,12 @@ export default function Messages() {
       setConversations((prev) =>
         prev.map((c) =>
           c.id === activeConvId
-            ? { ...c, last_message_content: content, last_message_time: new Date().toISOString() }
+            ? {
+                ...c,
+                last_message_content: content,
+                last_message_time: new Date().toISOString(),
+                last_message_sender_id: user.id
+              }
             : c
         )
       );
@@ -306,22 +365,47 @@ export default function Messages() {
   });
 
   const getRecipientInfo = (conv) => {
-    if (!conv) return { name: '', sub: '', avatar: null, isFarmer: false };
-    const isBuyer = conv.buyer_id === user?.id;
+    if (!conv) return { name: '', sub: '', avatar: null, isFarmer: false, farmLogo: null, buyerAvatar: null };
+
+    // Robustly determine if current user is the buyer in this conversation
+    const currentUserId = user?.id ? Number(user.id) : null;
+    const convBuyerId = conv.buyer_id ? Number(conv.buyer_id) : null;
+    const convSellerUserId = conv.seller_user_id ? Number(conv.seller_user_id) : null;
+
+    let isBuyer = false;
+    if (user?.role === 'buyer') {
+      isBuyer = true;
+    } else if (user?.role === 'seller') {
+      isBuyer = false;
+    } else if (currentUserId !== null && convBuyerId !== null) {
+      isBuyer = convBuyerId === currentUserId;
+    } else if (currentUserId !== null && convSellerUserId !== null) {
+      isBuyer = convSellerUserId !== currentUserId;
+    }
+
+    const farmLogo = conv.seller_logo || conv.farm_logo || conv.logo_image_url || conv.seller_owner_image;
+    const buyerAvatar = conv.buyer_avatar || conv.avatar_url;
+
     if (isBuyer) {
+      // Current user is the Buyer -> Target contact is the Farm / Farmer
       return {
-        name: conv.farm_name || conv.seller_name || 'Farmer',
-        sub: conv.seller_name ? `কৃষক: ${conv.seller_name}` : 'যাচাইকৃত কৃষক',
-        avatar: conv.seller_logo || conv.seller_owner_image,
+        name: conv.farm_name || conv.seller_name || (lang === 'bn' ? 'খামার' : 'Farm'),
+        sub: conv.farm_name ? `খামার: ${conv.farm_name}` : (conv.seller_name ? `কৃষক: ${conv.seller_name}` : 'যাচাইকৃত কৃষক'),
+        avatar: farmLogo, // Farm logo pic!
+        farmLogo: farmLogo,
+        buyerAvatar: buyerAvatar,
         phone: conv.seller_phone,
         isFarmer: true,
         sellerId: conv.seller_id
       };
     } else {
+      // Current user is the Farmer/Seller -> Target contact is the Buyer
       return {
-        name: conv.buyer_name || 'Customer',
-        sub: conv.buyer_phone || 'ক্রেতা',
-        avatar: conv.buyer_avatar,
+        name: conv.buyer_name || (lang === 'bn' ? 'ক্রেতা' : 'Customer'),
+        sub: conv.buyer_phone || (lang === 'bn' ? 'ক্রেতা' : 'Buyer'),
+        avatar: buyerAvatar, // Buyer profile picture!
+        farmLogo: farmLogo,
+        buyerAvatar: buyerAvatar,
         phone: conv.buyer_phone,
         isFarmer: false,
         sellerId: null
@@ -329,7 +413,8 @@ export default function Messages() {
     }
   };
 
-  const recipient = getRecipientInfo(activeConv);
+  const currentConv = activeConv || conversations.find((c) => c.id === activeConvId);
+  const recipient = getRecipientInfo(currentConv);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -358,30 +443,43 @@ export default function Messages() {
       </div>
 
       {/* Main Dual-Panel Hub */}
-      <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[640px] max-h-[750px]">
+      <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col md:flex-row h-[75vh] md:h-[750px] md:max-h-[calc(100vh-10rem)] min-h-[540px]">
         
-        {/* LEFT COLUMN: Conversations List (4 cols) */}
+        {/* LEFT COLUMN: Clickable Users / Conversations List (4 cols on lg, 5 cols on md) */}
         <div
-          className={`lg:col-span-4 border-r border-slate-200 flex flex-col ${
-            activeConvId ? 'hidden lg:flex' : 'flex'
+          className={`w-full md:w-5/12 lg:w-4/12 border-r border-slate-200 flex flex-col h-full min-h-0 bg-white shrink-0 ${
+            activeConvId ? 'hidden md:flex' : 'flex'
           }`}
         >
+          {/* Header */}
+          <div className="p-3.5 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-700" />
+              <span className="font-extrabold text-xs sm:text-sm text-slate-900">
+                {lang === 'bn' ? 'ব্যবহারকারী ও আলাপ' : 'Users & Chats'}
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+              {filteredConversations.length} {lang === 'bn' ? 'টি' : 'chats'}
+            </span>
+          </div>
+
           {/* Search Box */}
-          <div className="p-4 border-b border-slate-100 bg-slate-50/70">
+          <div className="p-3 border-b border-slate-100 bg-white shrink-0">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={lang === 'bn' ? 'খামার বা ক্রেতা খুঁজুন...' : 'Search threads or crops...'}
-                className="w-full pl-9 pr-4 py-2.5 bg-white rounded-2xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder={lang === 'bn' ? 'ব্যবহারকারী বা ফসল খুঁজুন...' : 'Search users or crops...'}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
               />
             </div>
           </div>
 
-          {/* Conversation List Items */}
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+          {/* Clickable User List */}
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-100">
             {loadingList ? (
               <div className="p-12 text-center">
                 <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
@@ -401,8 +499,16 @@ export default function Messages() {
               </div>
             ) : (
               filteredConversations.map((conv) => {
-                const info = getRecipientInfo(conv);
+                // Enrich active conversation with activeConv fresh data if active
+                const effectiveConv = (conv.id === activeConvId && activeConv) ? { ...conv, ...activeConv } : conv;
+                const info = getRecipientInfo(effectiveConv);
                 const isSelected = conv.id === activeConvId;
+
+                const lastMsgContent = effectiveConv.last_message_content || conv.last_message_content;
+                const lastSenderId = effectiveConv.last_message_sender_id ?? conv.last_message_sender_id;
+                const hasLastMsg = Boolean(lastMsgContent);
+                const isOwnLastMsg = hasLastMsg && lastSenderId && Number(lastSenderId) === Number(user?.id);
+                const isOtherUserLastMsg = hasLastMsg && (!isOwnLastMsg || conv.unread_count > 0);
 
                 return (
                   <button
@@ -412,25 +518,51 @@ export default function Messages() {
                       setActiveConvId(conv.id);
                       setSearchParams({ conversationId: conv.id });
                     }}
-                    className={`w-full p-4 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                    className={`w-full p-3.5 text-left flex items-start gap-3 transition-all cursor-pointer border-b border-slate-100/80 ${
                       isSelected
-                        ? 'bg-emerald-50/90 border-l-4 border-emerald-600'
-                        : 'hover:bg-slate-50/80 bg-white'
+                        ? 'bg-emerald-50/90 border-l-4 border-l-emerald-600 shadow-2xs'
+                        : 'hover:bg-slate-50/90 bg-white'
                     }`}
                   >
-                    {/* Avatar */}
-                    <div className="w-11 h-11 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden shadow-2xs">
-                      {info.avatar ? (
-                        <img src={info.avatar} alt={info.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span>{info.name ? info.name.charAt(0) : 'U'}</span>
-                      )}
+                    {/* User Avatar with Status: Farm Logo or Buyer Profile Picture */}
+                    <div className="relative shrink-0 mt-0.5">
+                      <div className={`w-11 h-11 relative flex items-center justify-center font-black text-sm shadow-2xs overflow-hidden border ${
+                        isSelected 
+                          ? 'border-emerald-500 ring-2 ring-emerald-500/30' 
+                          : 'border-slate-200'
+                      } ${
+                        info.isFarmer ? 'rounded-2xl bg-emerald-50 text-emerald-800' : 'rounded-full bg-blue-50 text-blue-800'
+                      }`}>
+                        {/* Fallback Icon in background */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          {info.isFarmer ? (
+                            <Sprout className="w-5 h-5 text-emerald-600" />
+                          ) : (
+                            <User className="w-5 h-5 text-blue-600" />
+                          )}
+                        </div>
+
+                        {/* Image on top */}
+                        {info.avatar ? (
+                          <img 
+                            src={info.avatar} 
+                            alt={info.name} 
+                            className="w-full h-full object-cover relative z-10" 
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : null}
+                      </div>
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ring-2 ring-white z-20 ${
+                        info.isFarmer ? 'bg-emerald-500' : 'bg-blue-500'
+                      }`} title={info.isFarmer ? (lang === 'bn' ? 'ফার্ম লোগো' : 'Farm Logo') : (lang === 'bn' ? 'ক্রেতার ছবি' : 'Buyer Photo')} />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        <h4 className="text-xs font-extrabold text-slate-900 truncate">{info.name}</h4>
-                        <span className="text-[10px] text-slate-400 shrink-0">
+                        <h4 className={`text-xs truncate ${isSelected ? 'font-black text-emerald-950' : 'font-extrabold text-slate-900'}`}>
+                          {info.name}
+                        </h4>
+                        <span className="text-[10px] text-slate-400 font-semibold shrink-0">
                           {conv.last_message_time
                             ? new Date(conv.last_message_time).toLocaleTimeString([], {
                                 hour: '2-digit',
@@ -440,25 +572,44 @@ export default function Messages() {
                         </span>
                       </div>
 
-                      {/* Product snippet tag */}
+                      {/* Subtitle / Role */}
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 ${
+                          info.isFarmer ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {info.isFarmer ? <Sprout className="w-2.5 h-2.5 text-emerald-700" /> : <User className="w-2.5 h-2.5 text-blue-700" />}
+                          {info.isFarmer ? (lang === 'bn' ? 'খামার' : 'Farm') : (lang === 'bn' ? 'ক্রেতা' : 'Buyer')}
+                        </span>
+                        <span className="text-[11px] text-slate-500 truncate">
+                          {info.phone || info.sub}
+                        </span>
+                      </div>
+
+                      {/* Product snippet tag if inquiring about a produce */}
                       {(conv.product_title_bn || conv.product_title_en) && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full mt-1">
-                          <Sprout className="w-3 h-3 text-emerald-600" />
-                          <span className="truncate max-w-[130px]">
+                        <div className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded-full mt-1.5">
+                          <Sprout className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span className="truncate max-w-[140px]">
                             {lang === 'bn' ? (conv.product_title_bn || conv.product_title_en) : conv.product_title_en}
                           </span>
-                        </span>
+                        </div>
                       )}
 
                       {/* Last Message Preview */}
-                      <p className="text-[11px] text-slate-500 truncate mt-1">
-                        {conv.last_message_content || (lang === 'bn' ? 'বার্তা পাঠান...' : 'Send message...')}
+                      <p className={`text-[11px] truncate mt-1 ${
+                        !hasLastMsg
+                          ? 'text-slate-400 italic font-normal'
+                          : isOtherUserLastMsg
+                          ? 'font-bold text-slate-900'
+                          : 'font-normal text-slate-500'
+                      }`}>
+                        {lastMsgContent || (lang === 'bn' ? 'বার্তা পাঠান...' : 'Send a message...')}
                       </p>
                     </div>
 
                     {/* Unread badge */}
                     {conv.unread_count > 0 && (
-                      <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-xs">
+                      <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center shrink-0 shadow-xs animate-pulse mt-0.5">
                         {conv.unread_count}
                       </span>
                     )}
@@ -469,13 +620,13 @@ export default function Messages() {
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Active Chat Window (8 cols) */}
+        {/* RIGHT COLUMN: Active Chat Window with Selected User */}
         <div
-          className={`lg:col-span-8 flex flex-col bg-slate-50/50 ${
-            !activeConvId ? 'hidden lg:flex' : 'flex'
+          className={`w-full md:w-7/12 lg:w-8/12 flex flex-col h-full min-h-0 bg-slate-50/50 flex-1 ${
+            !activeConvId ? 'hidden md:flex' : 'flex'
           }`}
         >
-          {activeConvId && activeConv ? (
+          {activeConvId && currentConv ? (
             <>
               {/* 1. Chat Header */}
               <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shrink-0 shadow-2xs">
@@ -484,17 +635,32 @@ export default function Messages() {
                   <button
                     type="button"
                     onClick={() => setActiveConvId(null)}
-                    className="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100"
+                    className="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100 cursor-pointer"
                   >
                     <ArrowLeft className="w-5 h-5" />
                   </button>
 
-                  <div className="w-11 h-11 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-bold text-base shrink-0 overflow-hidden shadow-2xs">
+                  <div className={`w-12 h-12 relative flex items-center justify-center font-bold text-base shrink-0 overflow-hidden shadow-2xs border ${
+                    recipient.isFarmer 
+                      ? 'rounded-2xl bg-emerald-50 text-emerald-800 border-emerald-300 ring-2 ring-emerald-500/20' 
+                      : 'rounded-full bg-blue-50 text-blue-800 border-blue-200 ring-2 ring-blue-500/20'
+                  }`}>
+                    {/* Fallback Icon in background */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      {recipient.isFarmer ? (
+                        <Sprout className="w-6 h-6 text-emerald-600" />
+                      ) : (
+                        <User className="w-6 h-6 text-blue-600" />
+                      )}
+                    </div>
                     {recipient.avatar ? (
-                      <img src={recipient.avatar} alt={recipient.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{recipient.name ? recipient.name.charAt(0) : 'U'}</span>
-                    )}
+                      <img 
+                        src={recipient.avatar} 
+                        alt={recipient.name} 
+                        className="w-full h-full object-cover relative z-10" 
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : null}
                   </div>
 
                   <div className="min-w-0">
@@ -502,6 +668,17 @@ export default function Messages() {
                       <h3 className="font-extrabold text-sm sm:text-base text-slate-900 truncate">
                         {recipient.name}
                       </h3>
+                      {recipient.isFarmer ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 shrink-0">
+                          <Sprout className="w-3 h-3 text-emerald-700" />
+                          {lang === 'bn' ? 'ফার্ম লোগো' : 'Farm Store'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-100 text-blue-800 shrink-0">
+                          <User className="w-3 h-3 text-blue-700" />
+                          {lang === 'bn' ? 'ক্রেতার ছবি' : 'Buyer'}
+                        </span>
+                      )}
                       {recipient.isFarmer && <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />}
                     </div>
                     <p className="text-xs text-slate-500 truncate">{recipient.sub}</p>
@@ -522,7 +699,7 @@ export default function Messages() {
                   {recipient.phone && (
                     <a
                       href={`tel:${recipient.phone}`}
-                      className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                      className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                       title={recipient.phone}
                     >
                       <Phone className="w-4 h-4" />
@@ -532,12 +709,12 @@ export default function Messages() {
               </div>
 
               {/* 2. Attached Crop Context Card (if any) */}
-              {activeConv.product_title_en && (
+              {(currentConv.product_title_en || currentConv.product_title || currentConv.product_title_bn) && (
                 <div className="px-5 py-3 bg-emerald-50/90 border-b border-emerald-100 flex items-center gap-3 shrink-0">
-                  {activeConv.product_image ? (
+                  {currentConv.product_image ? (
                     <img
-                      src={activeConv.product_image}
-                      alt={activeConv.product_title_en}
+                      src={currentConv.product_image}
+                      alt={currentConv.product_title_en || currentConv.product_title}
                       className="w-11 h-11 rounded-xl object-cover border border-emerald-200 shrink-0"
                     />
                   ) : (
@@ -551,18 +728,18 @@ export default function Messages() {
                       {lang === 'bn' ? 'আলোচিত ফসল ও পণ্য' : 'Crop In Discussion'}
                     </span>
                     <h4 className="text-xs font-extrabold text-slate-900 truncate">
-                      {lang === 'bn' ? (activeConv.product_title_bn || activeConv.product_title_en) : activeConv.product_title_en}
+                      {lang === 'bn' ? (currentConv.product_title_bn || currentConv.product_title_en || currentConv.product_title) : (currentConv.product_title_en || currentConv.product_title)}
                     </h4>
                   </div>
 
                   <div className="text-right shrink-0">
-                    <span className="text-sm font-black text-emerald-800">৳{activeConv.product_price}</span>
-                    <span className="text-[10px] text-slate-500 block">/{activeConv.product_unit || 'kg'}</span>
+                    <span className="text-sm font-black text-emerald-800">৳{currentConv.product_price}</span>
+                    <span className="text-[10px] text-slate-500 block">/{currentConv.product_unit || 'kg'}</span>
                   </div>
 
-                  {activeConv.product_id && (
+                  {currentConv.product_id && (
                     <Link
-                      to={`/products/${activeConv.product_id}`}
+                      to={`/products/${currentConv.product_id}`}
                       className="ml-2 text-xs font-bold text-emerald-700 hover:text-emerald-900 underline shrink-0"
                     >
                       {lang === 'bn' ? 'পণ্য দেখুন →' : 'View Crop →'}
@@ -571,8 +748,8 @@ export default function Messages() {
                 </div>
               )}
 
-              {/* 3. Message Bubble Feed */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-3">
+              {/* 3. Message Bubble Feed (Confined scrolling inside container ONLY) */}
+              <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-3">
                 {loadingMessages ? (
                   <div className="h-full flex items-center justify-center">
                     <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin" />
@@ -585,7 +762,7 @@ export default function Messages() {
                     </p>
                     <p className="text-[11px] text-slate-400 max-w-sm">
                       {lang === 'bn'
-                        ? 'নিচে বার্তা লিখে কৃষকের সাথে সরাসরি যোগাযোগ ও দাম নিয়ে কথা বলুন।'
+                        ? 'নিচে বার্তা লিখে সরাসরি যোগাযোগ ও দরদাম শুরু করুন।'
                         : 'Type a message below or pick one of the quick suggestions.'}
                     </p>
                   </div>
@@ -593,14 +770,48 @@ export default function Messages() {
                   messages.map((msg) => {
                     const isMe = msg.sender_id === user.id;
 
+                    // Determine sender identity: Farmer (Farm Logo) or Buyer (Buyer Profile Picture)
+                    const isMsgFromSeller =
+                      msg.sender_role === 'seller' ||
+                      (currentConv && msg.sender_id === currentConv.seller_user_id);
+
+                    const msgAvatar = isMsgFromSeller
+                      ? (msg.sender_avatar || currentConv?.seller_logo || currentConv?.seller_owner_image || (isMe && user?.sellerProfile?.logo_image_url))
+                      : (msg.sender_avatar || currentConv?.buyer_avatar || (isMe && user?.avatar_url));
+
+                    const msgSenderName = isMsgFromSeller
+                      ? (currentConv?.farm_name || msg.sender_name || (lang === 'bn' ? 'খামার' : 'Farm'))
+                      : (currentConv?.buyer_name || msg.sender_name || (lang === 'bn' ? 'ক্রেতা' : 'Buyer'));
+
                     return (
                       <div
                         key={msg.id}
                         className={`flex items-end gap-2.5 ${isMe ? 'justify-end' : 'justify-start'}`}
                       >
+                        {/* Incoming message sender avatar (Left): Farm Logo or Buyer Profile Photo */}
                         {!isMe && (
-                          <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-bold shrink-0 mb-1">
-                            {msg.sender_name ? msg.sender_name.charAt(0) : 'U'}
+                          <div
+                            className={`w-8 h-8 flex items-center justify-center font-bold text-[10px] shrink-0 mb-1 shadow-2xs overflow-hidden border ${
+                              isMsgFromSeller
+                                ? 'rounded-2xl bg-emerald-50 text-emerald-800 border-emerald-300'
+                                : 'rounded-full bg-blue-50 text-blue-800 border-blue-200'
+                            }`}
+                            title={`${msgSenderName} (${isMsgFromSeller ? (lang === 'bn' ? 'ফার্ম লোগো' : 'Farm Logo') : (lang === 'bn' ? 'ক্রেতার প্রোফাইল' : 'Buyer Profile')})`}
+                          >
+                            {msgAvatar ? (
+                              <img
+                                src={msgAvatar}
+                                alt={msgSenderName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : isMsgFromSeller ? (
+                              <Sprout className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <User className="w-4 h-4 text-blue-600" />
+                            )}
                           </div>
                         )}
 
@@ -611,6 +822,21 @@ export default function Messages() {
                               : 'bg-white text-slate-800 border border-slate-200 rounded-bl-xs'
                           }`}
                         >
+                          {/* Header badge on incoming messages */}
+                          {!isMe && (
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className={`text-[10px] font-black tracking-wide ${isMsgFromSeller ? 'text-emerald-700' : 'text-blue-700'}`}>
+                                {msgSenderName}
+                              </span>
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded-sm font-bold inline-flex items-center gap-0.5 ${
+                                isMsgFromSeller ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {isMsgFromSeller ? <Sprout className="w-2.5 h-2.5 text-emerald-700" /> : <User className="w-2.5 h-2.5 text-blue-700" />}
+                                {isMsgFromSeller ? (lang === 'bn' ? 'খামার' : 'Farm') : (lang === 'bn' ? 'ক্রেতা' : 'Buyer')}
+                              </span>
+                            </div>
+                          )}
+
                           <p className="break-words whitespace-pre-wrap">{msg.content}</p>
                           <div
                             className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
@@ -634,6 +860,33 @@ export default function Messages() {
                             )}
                           </div>
                         </div>
+
+                        {/* Outgoing message current user avatar (Right): Farm Logo or Buyer Profile Photo */}
+                        {isMe && (
+                          <div
+                            className={`w-8 h-8 flex items-center justify-center font-bold text-[10px] shrink-0 mb-1 shadow-2xs overflow-hidden border ${
+                              isMsgFromSeller
+                                ? 'rounded-2xl bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : 'rounded-full bg-blue-50 text-blue-800 border-blue-200'
+                            }`}
+                            title={isMsgFromSeller ? (lang === 'bn' ? 'আপনার ফার্ম লোগো' : 'Your Farm Logo') : (lang === 'bn' ? 'আপনার প্রোফাইল ছবি' : 'Your Profile Picture')}
+                          >
+                            {msgAvatar ? (
+                              <img
+                                src={msgAvatar}
+                                alt={msgSenderName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
+                            ) : isMsgFromSeller ? (
+                              <Sprout className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <User className="w-4 h-4 text-blue-600" />
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -646,11 +899,10 @@ export default function Messages() {
                     <span>{typingUser} {lang === 'bn' ? 'লিখছেন...' : 'is typing...'}</span>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
               </div>
 
               {/* 4. Quick Reply Shortcuts */}
-              <div className="px-4 py-2 bg-white/80 border-t border-slate-100 flex items-center gap-2 overflow-x-auto shrink-0">
+              <div className="px-4 py-2.5 bg-white/90 border-t border-slate-100 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
                 <span className="text-[10px] font-black uppercase text-slate-400 shrink-0">
                   {lang === 'bn' ? 'দ্রুত প্রশ্ন:' : 'Quick:'}
                 </span>
@@ -672,7 +924,7 @@ export default function Messages() {
                   e.preventDefault();
                   handleSendMessage();
                 }}
-                className="p-3 sm:p-4 bg-white border-t border-slate-200 flex items-center gap-2 sm:gap-3 shrink-0"
+                className="p-3.5 sm:p-4 bg-white border-t border-slate-200 flex items-center gap-2 sm:gap-3 shrink-0"
               >
                 <input
                   type="text"
@@ -685,9 +937,9 @@ export default function Messages() {
                 <button
                   type="submit"
                   disabled={!inputText.trim() || sending}
-                  className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-4 h-4 shrink-0" />
                   <span className="hidden sm:inline">{lang === 'bn' ? 'পাঠান' : 'Send'}</span>
                 </button>
               </form>
