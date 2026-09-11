@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import ProductCard from '../components/ProductCard';
+import FarmHeaderBanner from '../components/FarmHeaderBanner';
 import {
   ShieldCheck,
   MapPin,
@@ -14,7 +15,8 @@ import {
   AlertTriangle,
   Award,
   CheckCircle2,
-  Filter
+  Filter,
+  User
 } from 'lucide-react';
 
 export default function SellerStorefront() {
@@ -103,93 +105,38 @@ export default function SellerStorefront() {
         </nav>
       </div>
 
-      {/* Farmer Profile Hero Banner */}
+      {/* Farmer Profile Hero Banner (Unified Modern Component with 100% Clear Cover Photo) */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-        <div className="relative bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-950 rounded-3xl overflow-hidden shadow-xl text-white p-6 sm:p-10 border border-emerald-700">
-          
-          {/* Background Decorative Graphic */}
-          <div className="absolute -right-16 -top-16 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute right-1/4 -bottom-16 w-60 h-60 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
+        <FarmHeaderBanner
+          farmName={seller.farm_name}
+          farmerName={seller.farmer_name}
+          farmerPhone={seller.farmer_phone}
+          coverImageUrl={seller.cover_image_url}
+          logoImageUrl={seller.logo_image_url}
+          ownerImageUrl={seller.owner_image_url || seller.farmer_avatar}
+          division={seller.division}
+          district={seller.district}
+          upazila={seller.upazila}
+          address={seller.address}
+          bio={seller.bio}
+          createdAt={seller.created_at}
+          ratingAvg={stats.ratingAvg}
+          totalRatings={stats.totalRatings}
+          totalProducts={stats.totalProducts}
+          isSellerView={false}
+          sellerId={sellerId}
+        />
 
-          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-              
-              {/* Farm Avatar / Icon */}
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-white text-emerald-800 flex items-center justify-center font-black text-3xl sm:text-4xl shadow-lg shadow-black/20 border-4 border-emerald-500/30 shrink-0">
-                <Sprout className="w-12 h-12 text-emerald-600" />
-              </div>
-
-              {/* Farm Details */}
-              <div className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{seller.farm_name}</h1>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 backdrop-blur-md">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
-                    {t('verifiedFarmer')}
-                  </span>
-                </div>
-
-                <p className="text-sm text-emerald-200 font-medium">
-                  {lang === 'bn' ? 'খামারি:' : 'Farmer Owner:'} <strong>{seller.farmer_name}</strong>
-                </p>
-
-                <div className="flex flex-wrap items-center gap-4 text-xs text-emerald-100/90 pt-1">
-                  <div className="flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-amber-300" />
-                    <span>
-                      {seller.upazila ? `${seller.upazila}, ` : ''}{seller.district}, {seller.division}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-emerald-300" />
-                    <span>
-                      {lang === 'bn' ? 'নিবন্ধিত:' : 'Member Since:'}{' '}
-                      {new Date(seller.created_at || '2024-01-01').getFullYear()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Rating Box */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 flex items-center gap-4 shrink-0">
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-1 text-amber-400 font-black text-2xl">
-                  <Star className="w-6 h-6 fill-amber-400" />
-                  <span>{stats.ratingAvg.toFixed(1)}</span>
-                </div>
-                <span className="text-[11px] text-emerald-200 block mt-0.5">
-                  {stats.totalRatings} {t('customerReviews')}
-                </span>
-              </div>
-              <div className="h-10 w-px bg-white/20" />
-              <div className="text-center">
-                <span className="block font-black text-2xl text-white">{stats.totalProducts}</span>
-                <span className="text-[11px] text-emerald-200 block mt-0.5">
-                  {t('totalCropsListed')}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Farm Bio & Highlights */}
-          {seller.bio && (
-            <div className="relative z-10 mt-6 pt-5 border-t border-emerald-700/60 text-xs sm:text-sm text-emerald-100 leading-relaxed max-w-3xl">
-              <p>{seller.bio}</p>
-            </div>
-          )}
-
-          {/* Direct Farm Pickup Guarantee Badge */}
-          <div className="relative z-10 mt-4 flex flex-wrap items-center gap-3 text-xs">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-800/80 text-emerald-200 border border-emerald-600/50">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />
-              {lang === 'bn' ? 'খামার থেকে সরাসরি সংগ্রহের সুবিধা (Pickup Available)' : 'Direct Farm Pickup Available'}
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-800/80 text-emerald-200 border border-emerald-600/50">
-              <Award className="w-3.5 h-3.5 text-amber-300" />
-              {lang === 'bn' ? '১০০% ভেজালমুক্ত ফসল নিশ্চয়তা' : '100% Organic & Chemical Free Guarantee'}
-            </span>
-          </div>
+        {/* Direct Farm Pickup & Trust Guarantees */}
+        <div className="flex flex-wrap items-center gap-3 text-xs mb-8 -mt-4">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold shadow-2xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{lang === 'bn' ? 'খামার থেকে সরাসরি সংগ্রহের সুবিধা (Pickup Available)' : 'Direct Farm Gate Pickup Available'}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-amber-50 text-amber-900 border border-amber-200 font-bold shadow-2xs">
+            <Award className="w-4 h-4 text-amber-600" />
+            <span>{lang === 'bn' ? '১০০% ভেজালমুক্ত ও রাসায়নিকমুক্ত ফসল নিশ্চয়তা' : '100% Organic & Chemical Free Guarantee'}</span>
+          </span>
         </div>
       </div>
 

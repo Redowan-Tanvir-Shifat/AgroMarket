@@ -38,6 +38,7 @@ async function initDatabase() {
         district VARCHAR(50) DEFAULT 'Dhaka',
         upazila VARCHAR(50),
         address TEXT,
+        avatar_url TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB;
     `);
@@ -52,6 +53,9 @@ async function initDatabase() {
         district VARCHAR(50) NOT NULL,
         upazila VARCHAR(50),
         bio TEXT,
+        cover_image_url TEXT,
+        logo_image_url TEXT,
+        owner_image_url TEXT,
         nid_trade_license VARCHAR(50),
         payout_method ENUM('BKASH', 'NAGAD', 'ROCKET', 'BANK') DEFAULT 'BKASH',
         payout_number VARCHAR(20),
@@ -155,6 +159,66 @@ async function initDatabase() {
         FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
         UNIQUE KEY user_prod_unique (buyer_id, product_id)
+      ) ENGINE=InnoDB;
+    `);
+
+    // Product Images Table (Supports up to 5 photos per produce)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS product_images (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        image_url TEXT NOT NULL,
+        is_primary BOOLEAN DEFAULT FALSE,
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB;
+    `);
+
+    // Notifications Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(150) NOT NULL,
+        title_bn VARCHAR(150),
+        message TEXT NOT NULL,
+        message_bn TEXT,
+        link VARCHAR(255),
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB;
+    `);
+
+    // Chat Conversations Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS conversations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        buyer_id INT NOT NULL,
+        seller_id INT NOT NULL,
+        product_id INT NULL,
+        last_message_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE CASCADE,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB;
+    `);
+
+    // Chat Messages Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        conversation_id INT NOT NULL,
+        sender_id INT NOT NULL,
+        sender_role ENUM('buyer', 'seller') NOT NULL,
+        content TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB;
     `);
 

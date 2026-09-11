@@ -42,7 +42,7 @@ export const getStorefront = async (req, res) => {
 
     // 1. Fetch Seller & User info
     const [sellers] = await pool.query(
-      `SELECT s.*, u.full_name as farmer_name, u.phone as farmer_phone
+      `SELECT s.*, u.full_name as farmer_name, u.phone as farmer_phone, u.avatar_url as farmer_avatar
        FROM sellers s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ?`,
@@ -94,7 +94,7 @@ export const getSellerDashboardStats = async (req, res) => {
 
     // 1. Fetch Seller Info
     const [sellers] = await pool.query(
-      `SELECT s.*, u.full_name as farmer_name, u.phone as farmer_phone, u.email as farmer_email
+      `SELECT s.*, u.full_name as farmer_name, u.phone as farmer_phone, u.email as farmer_email, u.avatar_url as farmer_avatar
        FROM sellers s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ?`,
@@ -397,13 +397,22 @@ export const getSellerProductById = async (req, res) => {
       return res.status(404).json({ message: 'Crop listing not found or access denied' });
     }
 
-    return res.json({ product: products[0] });
+    const product = products[0];
+
+    // Fetch all images for this produce (up to 5 photos)
+    const [imageRows] = await pool.query(
+      `SELECT image_url, is_primary, sort_order FROM product_images WHERE product_id = ? ORDER BY sort_order ASC, id ASC`,
+      [id]
+    );
+    product.images = imageRows.length > 0 ? imageRows.map(img => img.image_url) : [product.image_url].filter(Boolean);
+
+    return res.json({ product });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch crop details', error: err.message });
   }
 };
 
-// @desc Add a New Crop Listing
+// @desc Add a New Crop Listing (Supports up to 5 photos)
 // @route POST /api/seller/products
 export const createProduct = async (req, res) => {
   try {
@@ -420,12 +429,19 @@ export const createProduct = async (req, res) => {
       harvest_date = new Date(),
       max_shelf_life_days = 7,
       unit = 'kg',
-      image_url
+      image_url,
+      images = [] // Max 5 photos
     } = req.body;
 
     if (!title || !base_price_bdt || !stock_quantity) {
       return res.status(400).json({ message: 'Title, base price, and stock quantity are required.' });
     }
+
+    // Determine primary thumbnail image
+    const validImages = Array.isArray(images) && images.length > 0 
+      ? images.slice(0, 5) 
+      : (image_url ? [image_url] : ['https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=600']);
+    const primaryImage = validImages[0];
 
     const [result] = await pool.query(
       `INSERT INTO products 
@@ -446,13 +462,30 @@ export const createProduct = async (req, res) => {
         formatDbDatetime(harvest_date) || formatDbDatetime(new Date()),
         max_shelf_life_days,
         unit,
-        image_url || 'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=600'
+        primaryImage
       ]
     );
 
+    const productId = result.insertId;
+
+    // Insert all uploaded photos into product_images table
+    if (validImages.length > 0) {
+      const imageRecords = validImages.map((url, idx) => [
+        productId,
+        url,
+        idx === 0 ? 1 : 0,
+        idx
+      ]);
+      await pool.query(
+        `INSERT INTO product_images (product_id, image_url, is_primary, sort_order) VALUES ?`,
+        [imageRecords]
+      );
+    }
+
     return res.status(201).json({
       message: 'নতুন ফসল সফলভাবে যুক্ত হয়েছে (Crop listed successfully)',
-      productId: result.insertId
+      productId,
+      imageCount: validImages.length
     });
   } catch (err) {
     console.error('Error creating crop listing:', err);
@@ -460,7 +493,7 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// @desc Update Existing Crop Listing
+// @desc Update Existing Crop Listing (Supports up to 5 photos)
 // @route PUT /api/seller/products/:id
 export const updateProduct = async (req, res) => {
   try {
@@ -479,13 +512,19 @@ export const updateProduct = async (req, res) => {
       max_shelf_life_days,
       unit,
       status,
-      image_url
+      image_url,
+      images // Max 5 photos
     } = req.body;
 
     // Verify ownership
     const [existing] = await pool.query('SELECT id FROM products WHERE id = ? AND seller_id = ?', [id, sellerId]);
     if (existing.length === 0) {
       return res.status(404).json({ message: 'Crop not found or access denied' });
+    }
+
+    let finalImageUrl = image_url;
+    if (Array.isArray(images) && images.length > 0) {
+      finalImageUrl = images[0];
     }
 
     await pool.query(
@@ -517,11 +556,27 @@ export const updateProduct = async (req, res) => {
         max_shelf_life_days,
         unit,
         status,
-        image_url,
+        finalImageUrl,
         id,
         sellerId
       ]
     );
+
+    // Sync product_images if images array is provided
+    if (Array.isArray(images) && images.length > 0) {
+      const validImages = images.slice(0, 5);
+      await pool.query('DELETE FROM product_images WHERE product_id = ?', [id]);
+      const imageRecords = validImages.map((url, idx) => [
+        id,
+        url,
+        idx === 0 ? 1 : 0,
+        idx
+      ]);
+      await pool.query(
+        `INSERT INTO product_images (product_id, image_url, is_primary, sort_order) VALUES ?`,
+        [imageRecords]
+      );
+    }
 
     return res.json({ message: 'ফসল তথ্য সফলভাবে আপডেট হয়েছে (Crop updated successfully)' });
   } catch (err) {
@@ -717,7 +772,7 @@ export const getSellerProfile = async (req, res) => {
     const sellerId = await resolveSellerId(req);
 
     const [sellers] = await pool.query(
-      `SELECT s.*, u.full_name, u.email, u.phone, u.address
+      `SELECT s.*, u.full_name, u.email, u.phone, u.address, u.avatar_url
        FROM sellers s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ?`,
@@ -734,7 +789,7 @@ export const getSellerProfile = async (req, res) => {
   }
 };
 
-// @desc Update Seller Profile & Digital Payout Settings
+// @desc Update Seller Profile & Digital Payout Settings (Supports Farm Cover, Logo, Owner Photo)
 // @route PUT /api/seller/profile
 export const updateSellerProfile = async (req, res) => {
   try {
@@ -745,6 +800,9 @@ export const updateSellerProfile = async (req, res) => {
       district,
       upazila,
       bio,
+      cover_image_url,
+      logo_image_url,
+      owner_image_url,
       nid_trade_license,
       payout_method,
       payout_number,
@@ -760,6 +818,9 @@ export const updateSellerProfile = async (req, res) => {
         district = COALESCE(?, district),
         upazila = COALESCE(?, upazila),
         bio = COALESCE(?, bio),
+        cover_image_url = COALESCE(?, cover_image_url),
+        logo_image_url = COALESCE(?, logo_image_url),
+        owner_image_url = COALESCE(?, owner_image_url),
         nid_trade_license = COALESCE(?, nid_trade_license),
         payout_method = COALESCE(?, payout_method),
         payout_number = COALESCE(?, payout_number)
@@ -770,6 +831,9 @@ export const updateSellerProfile = async (req, res) => {
         district,
         upazila,
         bio,
+        cover_image_url,
+        logo_image_url,
+        owner_image_url,
         nid_trade_license,
         payout_method,
         payout_number,
@@ -778,23 +842,24 @@ export const updateSellerProfile = async (req, res) => {
     );
 
     // Also update farmer user details if provided
-    if (full_name || phone || address) {
+    if (full_name || phone || address || owner_image_url) {
       const [sellers] = await pool.query('SELECT user_id FROM sellers WHERE id = ?', [sellerId]);
       if (sellers.length > 0 && sellers[0].user_id) {
         await pool.query(
           `UPDATE users SET
             full_name = COALESCE(?, full_name),
             phone = COALESCE(?, phone),
-            address = COALESCE(?, address)
+            address = COALESCE(?, address),
+            avatar_url = COALESCE(?, avatar_url)
            WHERE id = ?`,
-          [full_name, phone, address, sellers[0].user_id]
+          [full_name, phone, address, owner_image_url, sellers[0].user_id]
         );
       }
     }
 
     // Fetch updated profile
     const [updated] = await pool.query(
-      `SELECT s.*, u.full_name, u.email, u.phone, u.address
+      `SELECT s.*, u.full_name, u.email, u.phone, u.address, u.avatar_url
        FROM sellers s
        JOIN users u ON s.user_id = u.id
        WHERE s.id = ?`,
@@ -803,7 +868,7 @@ export const updateSellerProfile = async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'খামারের প্রোফাইল ও পেমেন্ট তথ্য সফলভাবে সংরক্ষিত হয়েছে (Profile saved)',
+      message: 'খামারের প্রোফাইল ও ছবি সফলভাবে সংরক্ষিত হয়েছে (Profile saved successfully)',
       profile: updated[0] || null
     });
   } catch (err) {

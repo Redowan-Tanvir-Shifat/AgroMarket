@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import FarmHeaderBanner from '../components/FarmHeaderBanner';
 import {
   TrendingUp,
   Package,
@@ -88,60 +89,30 @@ export default function SellerDashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-in fade-in">
       
-      {/* Top Banner: Farm Header & Profile Card */}
-      <div className="bg-gradient-to-r from-emerald-900 via-emerald-950 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden border border-emerald-800/40">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-800/80 border border-emerald-500/40 text-emerald-200 text-xs font-bold">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>{t('verifiedFarm')}</span>
-            </div>
-
-            <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-              {seller.farm_name || 'এগ্রোমার্কেট খামার'}
-            </h1>
-
-            <div className="flex flex-wrap items-center gap-4 text-xs text-emerald-200/90 font-medium">
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                {seller.upazila ? `${seller.upazila}, ` : ''}{seller.district || 'রাজশাহী'} ({seller.division || 'Rajshahi'})
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                <strong className="text-white">{kpis.ratingAvg || 4.9}</strong> ({kpis.totalRatings || 15} {lang === 'bn' ? 'রিভিউ' : 'reviews'})
-              </span>
-              <span>•</span>
-              <span className="text-emerald-300">
-                {seller.farmer_name} ({seller.farmer_phone})
-              </span>
-            </div>
-          </div>
-
-          {/* Right Farm Actions */}
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              to={`/storefront/${seller.id || selectedSellerId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 transition-all shadow-xs"
-            >
-              <ExternalLink className="w-4 h-4 text-emerald-300" />
-              <span>{t('viewMyStorefront')}</span>
-            </Link>
-
-            <Link
-              to="/seller/products/new"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-extrabold text-xs transition-all shadow-lg hover:scale-[1.02]"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>{t('addNewCropBtn')}</span>
-            </Link>
-          </div>
-        </div>
-      </div>
+      {/* Unified Farm Header Banner (Identical across Storefront, Profile & Dashboard) */}
+      <FarmHeaderBanner
+        farmName={seller.farm_name}
+        farmerName={seller.farmer_name}
+        farmerPhone={seller.farmer_phone}
+        coverImageUrl={seller.cover_image_url}
+        logoImageUrl={seller.logo_image_url}
+        ownerImageUrl={seller.owner_image_url || seller.farmer_avatar}
+        division={seller.division}
+        district={seller.district}
+        upazila={seller.upazila}
+        address={seller.address}
+        bio={seller.bio}
+        showBio={false}
+        createdAt={seller.created_at}
+        ratingAvg={kpis.ratingAvg || seller.rating_avg}
+        totalRatings={kpis.totalRatings || seller.total_ratings}
+        totalProducts={kpis.totalCrops}
+        isSellerView={true}
+        sellerId={seller.id || selectedSellerId}
+        showAddCropButton={true}
+        payoutMethod={seller.payout_method}
+        payoutNumber={seller.payout_number}
+      />
 
       {/* Loading Skeleton */}
       {loading ? (

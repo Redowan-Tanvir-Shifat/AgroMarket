@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import FreshnessBadge from '../components/FreshnessBadge';
+import FarmerIdentityModal from '../components/FarmerIdentityModal';
 import { formatHarvestAge } from '../utils/formatters';
 import {
   MapPin,
@@ -27,7 +28,11 @@ import {
   Check,
   X,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  ZoomIn
 } from 'lucide-react';
 
 export default function ProductDetails() {
@@ -47,6 +52,8 @@ export default function ProductDetails() {
   const [selectedUnit, setSelectedUnit] = useState('kg');
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [showFarmerModal, setShowFarmerModal] = useState(false);
 
   // Review Form
   const [userRating, setUserRating] = useState(5);
@@ -76,6 +83,7 @@ export default function ProductDetails() {
       setProduct(data.product);
       setReviews(data.reviews || []);
       setSelectedUnit(data.product.unit || 'kg');
+      setSelectedImageIndex(0);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -327,6 +335,12 @@ export default function ProductDetails() {
 
   const displayTitle = lang === 'bn' && product.title_bn ? product.title_bn : product.title;
 
+  const galleryImages = (product?.images && product.images.length > 0)
+    ? product.images.map(img => typeof img === 'string' ? img : img.image_url).filter(Boolean)
+    : [product?.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80'];
+
+  const currentMainImage = galleryImages[selectedImageIndex] || galleryImages[0] || product?.image_url;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb Navigation */}
@@ -346,16 +360,17 @@ export default function ProductDetails() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
 
         {/* Left Column: Image Gallery & Freshness Engine (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="relative bg-white rounded-3xl overflow-hidden border border-emerald-100 shadow-md">
+        <div className="lg:col-span-5 space-y-4">
+          {/* Main Active Image Display */}
+          <div className="relative bg-white rounded-3xl overflow-hidden border border-emerald-100 shadow-md group">
             <img
-              src={product.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80'}
+              src={currentMainImage}
               alt={displayTitle}
-              className="w-full h-80 sm:h-96 object-cover"
+              className="w-full h-80 sm:h-96 object-cover transition-all duration-300"
             />
 
             {/* Badges Overlay */}
-            <div className="absolute top-4 left-4 flex flex-col gap-2">
+            <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-white/95 text-emerald-900 shadow-sm border border-emerald-100 backdrop-blur-md">
                 <MapPin className="w-3.5 h-3.5 text-emerald-600" />
                 {product.farm_district || product.farm_division}
@@ -366,7 +381,7 @@ export default function ProductDetails() {
               </span>
             </div>
 
-            <div className="absolute top-4 right-4">
+            <div className="absolute top-4 right-4 z-10">
               <FreshnessBadge
                 ageInDays={ageInDays}
                 maxShelfLifeDays={maxShelfLife}
@@ -375,8 +390,35 @@ export default function ProductDetails() {
               />
             </div>
 
+            {/* Prev / Next Arrows for Multi-Image */}
+            {galleryImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setSelectedImageIndex(prev => (prev > 0 ? prev - 1 : galleryImages.length - 1))}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 cursor-pointer shadow-md z-10"
+                  title={lang === 'bn' ? 'পূর্ববর্তী ছবি' : 'Previous Image'}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedImageIndex(prev => (prev + 1) % galleryImages.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 cursor-pointer shadow-md z-10"
+                  title={lang === 'bn' ? 'পরবর্তী ছবি' : 'Next Image'}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+
+                {/* Photo Index Counter Pill */}
+                <div className="absolute bottom-16 right-4 bg-black/60 backdrop-blur-md text-white px-2.5 py-1 rounded-full text-[11px] font-bold z-10">
+                  {selectedImageIndex + 1} / {galleryImages.length}
+                </div>
+              </>
+            )}
+
             {/* Spoilage Loss Prevention Watermark */}
-            <div className="absolute bottom-4 left-4 right-4 bg-slate-900/80 backdrop-blur-md rounded-2xl p-3 text-white border border-white/20 flex items-center justify-between text-xs">
+            <div className="absolute bottom-4 left-4 right-4 bg-slate-900/80 backdrop-blur-md rounded-2xl p-3 text-white border border-white/20 flex items-center justify-between text-xs z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-400" />
                 <span>{t('harvestedAt')}: <strong>{harvestAgeFormatted} {lang === 'bn' ? 'আগে' : 'ago'}</strong></span>
@@ -384,6 +426,48 @@ export default function ProductDetails() {
               <span className="text-emerald-300 font-bold">{t('shelfLifeRemaining')}: {remainingDays} {t('shelfLifeDays')}</span>
             </div>
           </div>
+
+          {/* Thumbnail Gallery (Up to 5 Photos from Cloudinary) */}
+          {galleryImages.length > 1 && (
+            <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                  {lang === 'bn' ? `ফসলের ছবি (${galleryImages.length}/৫)` : `Produce Photos (${galleryImages.length}/5)`}
+                </span>
+                <span className="text-[10px] text-emerald-700 font-semibold">
+                  {lang === 'bn' ? 'ক্লিক করে ছবি নির্বাচন করুন' : 'Click thumbnail to view'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2.5 overflow-x-auto pb-1">
+                {galleryImages.map((imgUrl, idx) => {
+                  const isSelected = idx === selectedImageIndex;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setSelectedImageIndex(idx)}
+                      className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
+                        isSelected
+                          ? 'border-emerald-600 ring-2 ring-emerald-500/30 scale-105 shadow-sm'
+                          : 'border-slate-200 hover:border-emerald-300 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                      {idx === 0 && (
+                        <span className="absolute top-1 left-1 bg-emerald-700/90 text-white text-[9px] font-black px-1 py-0.2 rounded-xs">
+                          {lang === 'bn' ? 'মূল' : 'Main'}
+                        </span>
+                      )}
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-emerald-600/10" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Dynamic Produce Aging Engine Visual Box */}
           <div className="bg-emerald-900 text-white rounded-3xl p-6 border border-emerald-800 shadow-lg relative overflow-hidden">
@@ -434,9 +518,18 @@ export default function ProductDetails() {
 
           {/* Farmer Storefront Profile Widget (Moved to Left Side) */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-emerald-100 shadow-sm space-y-4">
+            {/* Farm Header with Logo */}
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-lg shadow-md shrink-0">
-                {product.farm_name ? product.farm_name.charAt(0) : 'F'}
+              <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-lg shadow-md shrink-0 overflow-hidden border-2 border-emerald-600/20">
+                {product.seller?.logo_image_url || product.logo_image_url ? (
+                  <img
+                    src={product.seller?.logo_image_url || product.logo_image_url}
+                    alt={product.farm_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span>{product.farm_name ? product.farm_name.charAt(0) : 'F'}</span>
+                )}
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
@@ -449,9 +542,43 @@ export default function ProductDetails() {
               </div>
             </div>
 
+            {/* Clickable Farmer Owner Identity Pill / Button */}
+            <button
+              type="button"
+              onClick={() => setShowFarmerModal(true)}
+              className="w-full p-3 rounded-2xl bg-emerald-50/70 hover:bg-emerald-100/80 border border-emerald-200/80 flex items-center gap-3 transition-all hover:scale-[1.01] cursor-pointer group text-left shadow-2xs"
+              title={lang === 'bn' ? 'কৃষকের ছবি ও বিস্তারিত দেখতে ক্লিক করুন' : 'Click to view farmer photo and credentials'}
+            >
+              <div className="relative shrink-0">
+                {(product.seller?.owner_image_url || product.owner_image_url || product.seller?.farmer_avatar) ? (
+                  <img
+                    src={product.seller?.owner_image_url || product.owner_image_url || product.seller?.farmer_avatar}
+                    alt={product.seller?.farmer_name || product.farmer_name || 'Farmer'}
+                    className="w-11 h-11 rounded-full object-cover border-2 border-emerald-500 shadow-sm group-hover:ring-2 group-hover:ring-emerald-400 transition-all"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-full bg-emerald-700 text-white flex items-center justify-center font-bold">
+                    <User className="w-5 h-5" />
+                  </div>
+                )}
+                <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-0.5 shadow-xs">
+                  <ZoomIn className="w-3 h-3" />
+                </span>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+                  {lang === 'bn' ? 'খামার মালিক' : 'Farm Owner'}
+                </span>
+                <div className="font-extrabold text-sm text-slate-800 truncate group-hover:text-emerald-700 transition-colors">
+                  {product.seller?.farmer_name || product.farmer_name || (lang === 'bn' ? 'মোঃ রফিকুল ইসলাম' : 'Farmer Rafiq')}
+                </div>
+              </div>
+            </button>
+
             <Link
               to={`/storefront/${product.seller_id}`}
-              className="w-full py-2.5 px-4 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-all flex items-center justify-center gap-2 shadow-2xs hover:shadow-xs"
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
             >
               <span>{t('viewStorefront')}</span>
               <span>→</span>
@@ -960,6 +1087,25 @@ export default function ProductDetails() {
           )}
         </div>
       </section>
+
+      {/* Farmer Owner Identity Modal with Enlarged Photo */}
+      <FarmerIdentityModal
+        isOpen={showFarmerModal}
+        onClose={() => setShowFarmerModal(false)}
+        farmerName={product.seller?.farmer_name || product.farmer_name}
+        farmerPhone={product.seller?.farmer_phone || product.farmer_phone}
+        farmName={product.farm_name}
+        ownerImageUrl={product.seller?.owner_image_url || product.owner_image_url || product.seller?.farmer_avatar}
+        logoImageUrl={product.seller?.logo_image_url || product.logo_image_url}
+        division={product.farm_division}
+        district={product.farm_district}
+        upazila={product.seller?.upazila}
+        address={product.seller?.address}
+        bio={product.seller?.bio || product.bio}
+        ratingAvg={product.seller_rating}
+        totalRatings={product.seller_total_ratings}
+        sellerId={product.seller_id}
+      />
     </div>
   );
 }

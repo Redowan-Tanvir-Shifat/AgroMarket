@@ -126,6 +126,25 @@ export const getProductById = async (req, res) => {
 
     const product = products[0];
 
+    // Fetch Product Images (Up to 5 photos per produce)
+    const [imageRows] = await pool.query(
+      `SELECT image_url, is_primary, sort_order FROM product_images WHERE product_id = ? ORDER BY sort_order ASC, id ASC`,
+      [id]
+    );
+    product.images = imageRows.length > 0 ? imageRows.map(img => img.image_url) : [product.image_url].filter(Boolean);
+
+    // Fetch Seller details
+    const [sellerRows] = await pool.query(
+      `SELECT s.*, u.full_name as farmer_name, u.phone as farmer_phone, u.avatar_url as farmer_avatar
+       FROM sellers s
+       JOIN users u ON s.user_id = u.id
+       WHERE s.id = ?`,
+      [product.seller_id]
+    );
+    if (sellerRows.length > 0) {
+      product.seller = sellerRows[0];
+    }
+
     // Fetch Reviews
     const [reviews] = await pool.query(`
       SELECT r.*, u.full_name as buyer_name

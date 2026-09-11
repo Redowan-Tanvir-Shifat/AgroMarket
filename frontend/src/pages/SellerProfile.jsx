@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import FarmHeaderBanner from '../components/FarmHeaderBanner';
 import {
   Building2,
   ShieldCheck,
@@ -24,7 +25,10 @@ import {
   Info,
   Lock,
   ChevronRight,
-  X
+  X,
+  Camera,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function SellerProfile() {
@@ -55,6 +59,11 @@ export default function SellerProfile() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [actionNotice, setActionNotice] = useState(null);
 
+  // Cloudinary media upload states
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingOwner, setUploadingOwner] = useState(false);
+
   // Form State
   const [formData, setFormData] = useState({
     farm_name: '',
@@ -66,6 +75,9 @@ export default function SellerProfile() {
     upazila: '',
     address: '',
     bio: '',
+    cover_image_url: '',
+    logo_image_url: '',
+    owner_image_url: '',
     nid_trade_license: '',
     payout_method: 'bkash',
     payout_number: '',
@@ -151,6 +163,9 @@ export default function SellerProfile() {
           upazila: p.upazila || '',
           address: p.address || '',
           bio: p.bio || '',
+          cover_image_url: p.cover_image_url || '',
+          logo_image_url: p.logo_image_url || '',
+          owner_image_url: p.owner_image_url || p.avatar_url || '',
           nid_trade_license: p.nid_trade_license || 'NID-19845012345678',
           payout_method: (p.payout_method || 'bkash').toLowerCase(),
           payout_number: p.payout_number || '',
@@ -167,6 +182,102 @@ export default function SellerProfile() {
       setTimeout(() => setActionNotice(null), 3500);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Upload Farm Cover Photo to Cloudinary
+  const handleCoverUpload = async (file) => {
+    if (!file) return;
+    try {
+      setUploadingCover(true);
+      const data = new FormData();
+      data.append('image', file);
+      const res = await axios.post('/api/upload/farm-cover', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success && res.data.url) {
+        setFormData(prev => ({ ...prev, cover_image_url: res.data.url }));
+        setActionNotice({
+          type: 'success',
+          title: lang === 'bn' ? 'কভার ছবি আপলোড হয়েছে!' : 'Cover Photo Uploaded!',
+          message: lang === 'bn' ? 'খামারের কভার ছবি ক্লাউডিনারিতে সফলভাবে সংরক্ষিত হয়েছে।' : 'Farm cover photo uploaded to Cloudinary successfully.'
+        });
+        setTimeout(() => setActionNotice(null), 4000);
+      }
+    } catch (err) {
+      console.error('Cover upload error:', err);
+      setActionNotice({
+        type: 'error',
+        title: lang === 'bn' ? 'আপলোড ব্যর্থ' : 'Upload Failed',
+        message: err.response?.data?.message || (lang === 'bn' ? 'কভার ছবি আপলোড করতে সমস্যা হয়েছে।' : 'Failed to upload cover photo.')
+      });
+      setTimeout(() => setActionNotice(null), 4000);
+    } finally {
+      setUploadingCover(false);
+    }
+  };
+
+  // Upload Farm Logo to Cloudinary
+  const handleLogoUpload = async (file) => {
+    if (!file) return;
+    try {
+      setUploadingLogo(true);
+      const data = new FormData();
+      data.append('image', file);
+      const res = await axios.post('/api/upload/farm-logo', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success && res.data.url) {
+        setFormData(prev => ({ ...prev, logo_image_url: res.data.url }));
+        setActionNotice({
+          type: 'success',
+          title: lang === 'bn' ? 'লোগো আপলোড হয়েছে!' : 'Logo Uploaded!',
+          message: lang === 'bn' ? 'খামারের প্রোফাইল লোগো ক্লাউডিনারিতে সফলভাবে সংরক্ষিত হয়েছে।' : 'Farm profile logo uploaded to Cloudinary successfully.'
+        });
+        setTimeout(() => setActionNotice(null), 4000);
+      }
+    } catch (err) {
+      console.error('Logo upload error:', err);
+      setActionNotice({
+        type: 'error',
+        title: lang === 'bn' ? 'আপলোড ব্যর্থ' : 'Upload Failed',
+        message: err.response?.data?.message || (lang === 'bn' ? 'লোগো আপলোড করতে সমস্যা হয়েছে।' : 'Failed to upload farm logo.')
+      });
+      setTimeout(() => setActionNotice(null), 4000);
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  // Upload Owner Avatar to Cloudinary
+  const handleOwnerUpload = async (file) => {
+    if (!file) return;
+    try {
+      setUploadingOwner(true);
+      const data = new FormData();
+      data.append('image', file);
+      const res = await axios.post('/api/upload/owner-avatar', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data.success && res.data.url) {
+        setFormData(prev => ({ ...prev, owner_image_url: res.data.url }));
+        setActionNotice({
+          type: 'success',
+          title: lang === 'bn' ? 'মালিকের ছবি আপলোড হয়েছে!' : 'Owner Photo Uploaded!',
+          message: lang === 'bn' ? 'খামার মালিকের ছবি ক্লাউডিনারিতে সফলভাবে সংরক্ষিত হয়েছে।' : 'Owner photo uploaded to Cloudinary successfully.'
+        });
+        setTimeout(() => setActionNotice(null), 4000);
+      }
+    } catch (err) {
+      console.error('Owner avatar upload error:', err);
+      setActionNotice({
+        type: 'error',
+        title: lang === 'bn' ? 'আপলোড ব্যর্থ' : 'Upload Failed',
+        message: err.response?.data?.message || (lang === 'bn' ? 'মালিকের ছবি আপলোড করতে সমস্যা হয়েছে।' : 'Failed to upload owner photo.')
+      });
+      setTimeout(() => setActionNotice(null), 4000);
+    } finally {
+      setUploadingOwner(false);
     }
   };
 
@@ -278,56 +389,30 @@ export default function SellerProfile() {
         </div>
       )}
 
-      {/* Farm Overview Banner (Matching Dashboard Modern Dark-Emerald Card) */}
-      <div className="bg-gradient-to-r from-emerald-900 via-emerald-950 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden border border-emerald-800/40">
-        <div className="absolute right-0 top-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute left-1/3 bottom-0 w-72 h-72 bg-teal-500/5 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-800/80 border border-emerald-500/40 text-emerald-200 text-xs font-bold">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>{t('verifiedFarm')}</span>
-            </div>
-
-            <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-              {formData.farm_name || (lang === 'bn' ? 'এগ্রোমার্কেট খামার' : 'AgroMarket Farm')}
-            </h2>
-
-            <div className="flex flex-wrap items-center gap-4 text-xs text-emerald-200/90 font-medium">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                {formData.upazila ? `${formData.upazila}, ` : ''}{formData.district || 'রাজশাহী'} ({formData.division || 'Rajshahi'})
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5">
-                <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                <strong className="text-white">{formData.rating_avg ? formData.rating_avg.toFixed(1) : '4.9'}</strong> ({formData.total_ratings || 18} {lang === 'bn' ? 'রিভিউ' : 'reviews'})
-              </span>
-              <span>•</span>
-              <span className="flex items-center gap-1.5 text-emerald-300">
-                <User className="w-3.5 h-3.5 text-emerald-400" />
-                {formData.full_name || 'মোঃ রফিকুল ইসলাম'} {formData.phone ? `(${formData.phone})` : ''}
-              </span>
-            </div>
-          </div>
-
-          {/* Right Status / Quick Rail Pill */}
-          <div className="flex flex-wrap sm:flex-col items-start sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-emerald-800/60 pt-4 sm:pt-0 gap-2 shrink-0">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-800/70 border border-emerald-500/40 text-emerald-100 text-xs font-bold shadow-sm">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>{lang === 'bn' ? 'সক্রিয় খামার অংশীদার' : 'Active Farm Partner'}</span>
-            </div>
-            {formData.payout_number && (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/10 border border-white/15 text-xs text-emerald-200 font-semibold">
-                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="uppercase">{formData.payout_method || 'bKash'}:</span>
-                <span className="font-mono text-white font-bold">{formData.payout_number}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Unified Modern Farm Overview Banner (100% Unobstructed Cover Photo & Clean Details Bar) */}
+      <FarmHeaderBanner
+        farmName={formData.farm_name}
+        farmerName={formData.full_name}
+        farmerPhone={formData.phone}
+        coverImageUrl={formData.cover_image_url}
+        logoImageUrl={formData.logo_image_url}
+        ownerImageUrl={formData.owner_image_url}
+        division={formData.division}
+        district={formData.district}
+        upazila={formData.upazila}
+        address={formData.address}
+        bio={formData.bio}
+        ratingAvg={formData.rating_avg}
+        totalRatings={formData.total_ratings}
+        isSellerView={true}
+        sellerId={selectedSellerId}
+        uploadingCover={uploadingCover}
+        uploadingLogo={uploadingLogo}
+        onCoverUpload={handleCoverUpload}
+        onLogoUpload={handleLogoUpload}
+        payoutMethod={formData.payout_method}
+        payoutNumber={formData.payout_number}
+      />
 
       {/* Main Grid: Form (8 cols) & Live Preview (4 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -471,7 +556,247 @@ export default function SellerProfile() {
             </div>
           </div>
 
-          {/* Card 2: Geographical Farm Coordinates */}
+          {/* Card 2: Farm Media & Branding (Cloudinary Powered) */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
+                    <span>{lang === 'bn' ? 'খামারের ব্র্যান্ডিং ও ফটো মিডিয়া' : 'Farm Media & Branding'}</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-100 text-teal-800">
+                      Cloudinary CDN
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {lang === 'bn'
+                      ? 'খামারের ব্যানার কভার, প্রোফাইল লোগো ও মালিকের ছবি আপলোড করুন'
+                      : 'Upload HD farm cover photo, profile logo, and owner portrait photo'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg">
+                {lang === 'bn' ? 'ধাপ ২' : 'Step 2'}
+              </span>
+            </div>
+
+            {/* Media Item 1: Farm Cover Photo (Wide Aspect Ratio) */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                  {lang === 'bn' ? '১. খামারের ব্যানার / কভার ছবি (Cover Photo)' : '1. Farm Banner / Cover Photo'}
+                </label>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {lang === 'bn' ? 'অনুপাত ১৬:৯ বা প্যানোরামিক (সর্বোচ্চ ১০ এমবি)' : 'Recommended 16:9 / Panoramic (Max 10MB)'}
+                </span>
+              </div>
+
+              {formData.cover_image_url ? (
+                <div className="relative w-full h-44 sm:h-52 rounded-2xl overflow-hidden border border-emerald-300 shadow-sm group">
+                  <img
+                    src={formData.cover_image_url}
+                    alt="Farm Cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-900/20 to-transparent flex items-end justify-between p-4">
+                    <div className="text-white">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600/90 text-[11px] font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {lang === 'bn' ? 'কভার ছবি সক্রিয়' : 'Cover Photo Active'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="card-cover-file-input"
+                        className="px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white text-slate-800 text-xs font-bold cursor-pointer transition-colors shadow-md flex items-center gap-1.5"
+                      >
+                        {uploadingCover ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                        ) : (
+                          <Camera className="w-3.5 h-3.5 text-emerald-700" />
+                        )}
+                        <span>{lang === 'bn' ? 'পরিবর্তন করুন' : 'Replace'}</span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, cover_image_url: '' }))}
+                        className="p-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-700 text-white text-xs cursor-pointer shadow-md transition-colors"
+                        title={lang === 'bn' ? 'ছবি মুছুন' : 'Remove Cover Photo'}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <label
+                  htmlFor="card-cover-file-input"
+                  className={`w-full h-36 sm:h-44 rounded-2xl border-2 border-dashed border-emerald-300 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50/70 transition-all flex flex-col items-center justify-center cursor-pointer p-4 text-center group ${
+                    uploadingCover ? 'pointer-events-none opacity-60' : ''
+                  }`}
+                >
+                  {uploadingCover ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" />
+                      <p className="text-xs font-bold text-emerald-800">
+                        {lang === 'bn' ? 'ক্লাউডিনারিতে আপলোড হচ্ছে...' : 'Uploading cover to Cloudinary CDN...'}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="w-12 h-12 rounded-2xl bg-white text-emerald-600 shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <p className="text-xs font-extrabold text-slate-800">
+                        {lang === 'bn' ? 'কভার ছবি আপলোড করতে ক্লিক করুন' : 'Click to Upload Farm Cover Photo'}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        {lang === 'bn'
+                          ? 'আপনার খামার বা শস্যক্ষেত্রের সুন্দর দৃশ্য আপলোড করুন (JPG, PNG, WebP)'
+                          : 'High resolution landscape photo of your farm or fields'}
+                      </p>
+                    </>
+                  )}
+                </label>
+              )}
+              <input
+                type="file"
+                id="card-cover-file-input"
+                accept="image/*"
+                onChange={(e) => e.target.files?.[0] && handleCoverUpload(e.target.files[0])}
+                className="hidden"
+                disabled={uploadingCover}
+              />
+            </div>
+
+            {/* Media Items 2 & 3: Logo and Owner Photo Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
+              {/* Farm Profile Logo */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    {lang === 'bn' ? '২. খামারের প্রতীক / লোগো' : '2. Farm Profile Logo'}
+                  </label>
+                  <span className="text-[10px] font-semibold text-slate-400">১:১ (বর্গাকার)</span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24 rounded-2xl bg-white border-2 border-dashed border-emerald-300 flex items-center justify-center overflow-hidden shadow-xs shrink-0 group">
+                    {formData.logo_image_url ? (
+                      <img src={formData.logo_image_url} alt="Farm Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      <Store className="w-10 h-10 text-emerald-600" />
+                    )}
+                    {uploadingLogo && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-600 leading-tight">
+                      {lang === 'bn'
+                        ? 'খামারের নিজস্ব ব্র্যান্ড প্রতীক বা পরিচিতি লোগো।'
+                        : 'Square identity mark shown on product cards & farm header.'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="card-logo-file-input"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition-colors shadow-xs inline-flex items-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{formData.logo_image_url ? (lang === 'bn' ? 'বদলান' : 'Change') : (lang === 'bn' ? 'লোগো দিন' : 'Upload Logo')}</span>
+                      </label>
+                      {formData.logo_image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, logo_image_url: '' }))}
+                          className="p-1.5 rounded-xl bg-slate-200 hover:bg-rose-100 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Remove Logo"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  id="card-logo-file-input"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleLogoUpload(e.target.files[0])}
+                  className="hidden"
+                  disabled={uploadingLogo}
+                />
+              </div>
+
+              {/* Owner / Farmer Portrait Photo */}
+              <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    {lang === 'bn' ? '৩. কৃষক / মালিকের ছবি' : '3. Owner / Farmer Photo'}
+                  </label>
+                  <span className="text-[10px] font-semibold text-slate-400">১:১ (প্রোফাইল)</span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="relative w-24 h-24 rounded-full bg-white border-2 border-dashed border-emerald-300 flex items-center justify-center overflow-hidden shadow-xs shrink-0 group">
+                    {formData.owner_image_url ? (
+                      <img src={formData.owner_image_url} alt="Owner" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-10 h-10 text-emerald-600" />
+                    )}
+                    {uploadingOwner && (
+                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                        <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs text-slate-600 leading-tight">
+                      {lang === 'bn'
+                        ? 'কৃষকের আসল ছবি থাকলে সরাসরি ক্রেতাদের আস্থা বহুগুণ বাড়ে।'
+                        : 'Real farmer portrait builds strong customer trust.'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <label
+                        htmlFor="card-owner-file-input"
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer transition-colors shadow-xs inline-flex items-center gap-1.5"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>{formData.owner_image_url ? (lang === 'bn' ? 'বদলান' : 'Change') : (lang === 'bn' ? 'ছবি দিন' : 'Upload Photo')}</span>
+                      </label>
+                      {formData.owner_image_url && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, owner_image_url: '' }))}
+                          className="p-1.5 rounded-xl bg-slate-200 hover:bg-rose-100 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Remove Owner Photo"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="file"
+                  id="card-owner-file-input"
+                  accept="image/*"
+                  onChange={(e) => e.target.files?.[0] && handleOwnerUpload(e.target.files[0])}
+                  className="hidden"
+                  disabled={uploadingOwner}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Geographical Farm Coordinates */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-2.5">
@@ -488,7 +813,7 @@ export default function SellerProfile() {
                 </div>
               </div>
               <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg">
-                {lang === 'bn' ? 'ধাপ ২' : 'Step 2'}
+                {lang === 'bn' ? 'ধাপ ৩' : 'Step 3'}
               </span>
             </div>
 
@@ -587,7 +912,7 @@ export default function SellerProfile() {
                 </div>
               </div>
               <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg">
-                {lang === 'bn' ? 'ধাপ ৩' : 'Step 3'}
+                {lang === 'bn' ? 'ধাপ ৪' : 'Step 4'}
               </span>
             </div>
 
@@ -729,40 +1054,72 @@ export default function SellerProfile() {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             </div>
 
-            {/* Mirrored Farmer Public Card */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-lg shadow-md shrink-0">
-                  {formData.farm_name ? formData.farm_name.charAt(0) : 'F'}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1">
-                    <h4 className="font-extrabold text-sm text-slate-900 truncate">
-                      {formData.farm_name || (lang === 'bn' ? 'খামারের নাম' : 'Farm Name')}
-                    </h4>
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  </div>
-                  <p className="text-[11px] text-slate-500 truncate">
-                    {formData.district || 'রাজশাহী'}, {formData.division || 'রাজশাহী'}
-                  </p>
+            {/* Mirrored Farmer Public Card with Live Media Branding */}
+            <div className="rounded-2xl bg-slate-950 border border-emerald-800/60 overflow-hidden shadow-md space-y-0 text-white">
+              {/* Mini Cover Header */}
+              <div
+                className="h-28 w-full bg-gradient-to-r from-emerald-800 to-slate-900 relative overflow-hidden"
+                style={formData.cover_image_url ? {
+                  backgroundImage: `url(${formData.cover_image_url})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                } : undefined}
+              >
+                <div className="absolute top-2 right-2">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-600/90 text-white text-[10px] font-black backdrop-blur-xs flex items-center gap-1 shadow-xs">
+                    <ShieldCheck className="w-3 h-3" />
+                    {lang === 'bn' ? 'যাচাইকৃত' : 'Verified'}
+                  </span>
                 </div>
               </div>
 
-              {formData.bio && (
-                <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed bg-white p-2.5 rounded-xl border border-slate-100">
-                  "{formData.bio}"
-                </p>
-              )}
-
-              <div className="flex items-center justify-between pt-1 text-[11px]">
-                <div className="flex items-center gap-1 text-amber-500 font-bold">
-                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                  <span>{formData.rating_avg.toFixed(1)}</span>
-                  <span className="text-slate-400 font-normal">({formData.total_ratings} {lang === 'bn' ? 'রিভিউ' : 'reviews'})</span>
+              {/* Content Area */}
+              <div className="p-4 pt-0 space-y-3 relative bg-gradient-to-b from-emerald-950 via-slate-950 to-slate-950">
+                {/* Overlapping Logo */}
+                <div className="-mt-8 flex items-end justify-between">
+                  <div className="w-14 h-14 rounded-2xl bg-white text-emerald-800 flex items-center justify-center font-black text-xl shadow-md border-2 border-emerald-500/40 overflow-hidden shrink-0">
+                    {formData.logo_image_url ? (
+                      <img src={formData.logo_image_url} alt="Farm Logo" className="w-full h-full object-cover" />
+                    ) : (
+                      formData.farm_name ? formData.farm_name.charAt(0) : 'F'
+                    )}
+                  </div>
+                  {formData.owner_image_url && (
+                    <div className="flex items-center gap-1.5 bg-white/10 px-2 py-1 rounded-full border border-white/15 shadow-2xs backdrop-blur-md">
+                      <img src={formData.owner_image_url} alt="Owner" className="w-4 h-4 rounded-full object-cover border border-emerald-400" />
+                      <span className="text-[10px] font-bold text-emerald-100 truncate max-w-[100px]">
+                        {formData.full_name || 'কৃষক'}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[10px]">
-                  {lang === 'bn' ? 'যাচাইকৃত কৃষক' : 'Verified Partner'}
-                </span>
+
+                <div>
+                  <h4 className="font-black text-sm text-white truncate">
+                    {formData.farm_name || (lang === 'bn' ? 'খামারের নাম' : 'Farm Name')}
+                  </h4>
+                  <p className="text-[11px] text-emerald-300/80 truncate flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <span>{formData.upazila ? `${formData.upazila}, ` : ''}{formData.district || 'রাজশাহী'}, {formData.division || 'Rajshahi'}</span>
+                  </p>
+                </div>
+
+                {formData.bio && (
+                  <p className="text-xs text-emerald-100/90 line-clamp-2 leading-relaxed bg-white/5 p-2.5 rounded-xl border border-white/10 italic break-words [overflow-wrap:anywhere] break-all">
+                    "{formData.bio}"
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between pt-1 border-t border-white/10 text-[11px]">
+                  <div className="flex items-center gap-1 text-amber-400 font-bold">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span>{formData.rating_avg.toFixed(1)}</span>
+                    <span className="text-emerald-300/80 font-normal">({formData.total_ratings} {lang === 'bn' ? 'রিভিউ' : 'reviews'})</span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-800/80 border border-emerald-600/40 text-emerald-200 font-bold text-[10px]">
+                    {lang === 'bn' ? 'সরাসরি খামার' : 'Direct Farm'}
+                  </span>
+                </div>
               </div>
             </div>
 

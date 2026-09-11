@@ -22,7 +22,13 @@ import {
   MapPin,
   ShieldCheck,
   DollarSign,
-  Layers
+  Layers,
+  Upload,
+  X,
+  Camera,
+  Trash2,
+  Star,
+  Plus
 } from 'lucide-react';
 
 const PRESET_IMAGES = [
@@ -75,6 +81,12 @@ export default function SellerProductForm() {
   const [submitting, setSubmitting] = useState(false);
   const [errorNotice, setErrorNotice] = useState(null);
 
+  // Multi-image state (Max 5 photos per produce)
+  const [images, setImages] = useState([PRESET_IMAGES[0].url]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+
   // Form State
   const [formData, setFormData] = useState({
     title: '',
@@ -120,6 +132,12 @@ export default function SellerProductForm() {
           unit: crop.unit || 'kg',
           image_url: crop.image_url || PRESET_IMAGES[0].url
         });
+
+        if (crop.images && Array.isArray(crop.images) && crop.images.length > 0) {
+          setImages(crop.images);
+        } else if (crop.image_url) {
+          setImages([crop.image_url]);
+        }
       }
     } catch (err) {
       console.error('Failed to load crop for edit:', err);
@@ -127,6 +145,77 @@ export default function SellerProductForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Upload crop images to Cloudinary (Max 5 photos)
+  const handleImageFilesUpload = async (fileList) => {
+    const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+
+    const availableSlots = 5 - images.length;
+    if (availableSlots <= 0) {
+      setUploadError(lang === 'bn' ? 'সর্বোচ্চ ৫টি ছবি আপলোড করা যাবে।' : 'Maximum 5 photos allowed per produce.');
+      return;
+    }
+
+    const filesToUpload = files.slice(0, availableSlots);
+    if (files.length > availableSlots) {
+      setUploadError(lang === 'bn' 
+        ? `কেবল প্রথম ${availableSlots}টি ছবি নেওয়া হয়েছে (সর্বোচ্চ ৫টি সীমা)।` 
+        : `Only first ${availableSlots} photos uploaded (Max 5 limit).`);
+    } else {
+      setUploadError(null);
+    }
+
+    try {
+      setUploadingImages(true);
+      const uploadData = new FormData();
+      filesToUpload.forEach(file => {
+        uploadData.append('images', file);
+      });
+
+      const res = await axios.post('/api/upload/produce', uploadData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data.success && res.data.urls) {
+        const newImages = [...images, ...res.data.urls].slice(0, 5);
+        setImages(newImages);
+        setFormData(prev => ({ ...prev, image_url: newImages[0] }));
+      }
+    } catch (err) {
+      console.error('Image upload failed:', err);
+      setUploadError(err.response?.data?.message || (lang === 'bn' ? 'ছবি আপলোড করতে ব্যর্থ হয়েছে।' : 'Failed to upload images.'));
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const handleRemoveImage = (indexToRemove) => {
+    const updated = images.filter((_, idx) => idx !== indexToRemove);
+    setImages(updated);
+    setFormData(prev => ({ ...prev, image_url: updated[0] || '' }));
+    setUploadError(null);
+  };
+
+  const handleSetPrimary = (indexToPrimary) => {
+    if (indexToPrimary === 0) return;
+    const selected = images[indexToPrimary];
+    const updated = [selected, ...images.filter((_, idx) => idx !== indexToPrimary)];
+    setImages(updated);
+    setFormData(prev => ({ ...prev, image_url: updated[0] }));
+  };
+
+  const handleAddPreset = (presetUrl) => {
+    if (images.includes(presetUrl)) return;
+    if (images.length >= 5) {
+      setUploadError(lang === 'bn' ? 'সর্বোচ্চ ৫টি ছবি যোগ করা সম্ভব।' : 'Maximum 5 photos limit reached.');
+      return;
+    }
+    const updated = [...images, presetUrl];
+    setImages(updated);
+    setFormData(prev => ({ ...prev, image_url: updated[0] }));
+    setUploadError(null);
   };
 
   const handleChange = (field, value) => {
@@ -154,10 +243,16 @@ export default function SellerProductForm() {
       setSubmitting(true);
       setErrorNotice(null);
 
+      const payload = {
+        ...formData,
+        images: images.length > 0 ? images : [formData.image_url],
+        image_url: images[0] || formData.image_url
+      };
+
       if (isEditing) {
-        await axios.put(`/api/seller/products/${id}`, formData);
+        await axios.put(`/api/seller/products/${id}`, payload);
       } else {
-        await axios.post('/api/seller/products', formData);
+        await axios.post('/api/seller/products', payload);
       }
 
       navigate('/seller/inventory');
@@ -582,66 +677,198 @@ export default function SellerProductForm() {
             </div>
           </div>
 
-          {/* SECTION 4: PRODUCE MEDIA & PRESET PHOTOS */}
+          {/* SECTION 4: PRODUCE MEDIA & CLOUDINARY MULTI-PHOTO UPLOAD (MAX 5 PHOTOS) */}
           <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs space-y-6">
-            <div className="flex items-center gap-2 text-slate-900 border-b border-slate-100 pb-3">
-              <ImageIcon className="w-5 h-5 text-emerald-600" />
-              <h3 className="font-extrabold text-base">
-                {lang === 'bn' ? '৪. ফসলের ছবি নির্বাচন' : '4. Crop Photo'}
-              </h3>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-slate-900">
+                <Camera className="w-5 h-5 text-emerald-600" />
+                <h3 className="font-extrabold text-base">
+                  {lang === 'bn' ? '৪. ফসলের ছবি (সর্বোচ্চ ৫টি ছবি)' : '4. Produce Photos (Max 5 Photos)'}
+                </h3>
+              </div>
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                images.length >= 5
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-emerald-50 text-emerald-700'
+              }`}>
+                {images.length} / 5 {lang === 'bn' ? 'ছবি' : 'Photos'}
+              </span>
             </div>
 
-            {/* Custom URL */}
-            <div className="space-y-1.5">
-              <label className="block text-xs font-bold text-slate-700">
-                {t('imageUrlLabel')}
-              </label>
-              <input
-                type="url"
-                value={formData.image_url}
-                onChange={(e) => handleChange('image_url', e.target.value)}
-                placeholder="https://..."
-                className="w-full px-4 py-3 text-xs sm:text-sm font-medium bg-slate-50 border border-slate-300 rounded-2xl focus:outline-none focus:border-emerald-500 focus:bg-white"
-              />
-            </div>
+            {/* Cloudinary Drag-and-Drop Dropzone */}
+            {images.length < 5 ? (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  if (e.dataTransfer.files) {
+                    handleImageFilesUpload(e.dataTransfer.files);
+                  }
+                }}
+                className={`relative border-2 border-dashed rounded-3xl p-6 sm:p-8 text-center transition-all ${
+                  isDragging
+                    ? 'border-emerald-500 bg-emerald-50/50 scale-[1.01]'
+                    : 'border-slate-300 hover:border-emerald-400 bg-slate-50/50'
+                }`}
+              >
+                <input
+                  type="file"
+                  id="produce-photo-input"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      handleImageFilesUpload(e.target.files);
+                    }
+                  }}
+                  className="hidden"
+                  disabled={uploadingImages}
+                />
 
-            {/* Preset Photo Grid */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-600">
-                {t('selectPresetImage')}
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {PRESET_IMAGES.map((preset, idx) => {
-                  const isSelected = formData.image_url === preset.url;
-                  return (
-                    <button
+                <label
+                  htmlFor="produce-photo-input"
+                  className="cursor-pointer flex flex-col items-center justify-center space-y-3"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-100/80 text-emerald-700 flex items-center justify-center shadow-xs">
+                    {uploadingImages ? (
+                      <div className="w-6 h-6 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Upload className="w-7 h-7" />
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">
+                      {uploadingImages
+                        ? (lang === 'bn' ? 'ক্লাউডিনারিতে আপলোড হচ্ছে...' : 'Uploading to Cloudinary CDN...')
+                        : (lang === 'bn' ? 'ছবি আপলোড করতে ক্লিক করুন বা টেনে আনুন' : 'Click to upload or drag & drop harvest photos')}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {lang === 'bn'
+                        ? `JPEG, PNG, WebP (প্রতি ছবি সর্বোচ্চ ১০ মেগাবাইট, আরও ${5 - images.length}টি বাকি)`
+                        : `JPEG, PNG, WebP (Max 10MB each, ${5 - images.length} slots remaining)`}
+                    </p>
+                  </div>
+                </label>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  {lang === 'bn'
+                    ? 'আপনি সর্বোচ্চ ৫টি ছবি যুক্ত করেছেন। নতুন ছবি আপলোড করতে চাইলে আগের ছবি মুছুন।'
+                    : 'Maximum 5 photos reached. Remove an image to upload a new one.'}
+                </span>
+              </div>
+            )}
+
+            {uploadError && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            {/* Gallery of Uploaded Photos */}
+            {images.length > 0 && (
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700">
+                  {lang === 'bn' ? 'যুক্ত ছবিসমূহ (প্রথমটি মূল প্রদর্শনী ছবি হিসেবে ব্যবহৃত হবে):' : 'Uploaded Photos (First photo is primary thumbnail):'}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {images.map((imgUrl, idx) => (
+                    <div
                       key={idx}
-                      type="button"
-                      onClick={() => handleChange('image_url', preset.url)}
-                      className={`group relative rounded-2xl overflow-hidden border-2 transition-all text-left ${
-                        isSelected
-                          ? 'border-emerald-600 ring-2 ring-emerald-500/30 scale-102 shadow-md'
-                          : 'border-slate-200 hover:border-emerald-300'
+                      className={`relative group rounded-2xl overflow-hidden border-2 transition-all bg-slate-100 ${
+                        idx === 0
+                          ? 'border-emerald-600 ring-2 ring-emerald-500/20 shadow-md'
+                          : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
                       <img
-                        src={preset.url}
-                        alt={preset.name}
-                        className="w-full h-20 object-cover group-hover:scale-105 transition-transform"
+                        src={imgUrl}
+                        alt={`Produce ${idx + 1}`}
+                        className="w-full h-24 object-cover"
                       />
-                      <div className="p-1.5 bg-white text-[10px] font-bold text-slate-700 truncate">
-                        {preset.name}
-                      </div>
-                      {isSelected && (
-                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </div>
+
+                      {/* Primary Indicator Badge */}
+                      {idx === 0 ? (
+                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[9px] font-extrabold shadow-sm flex items-center gap-1">
+                          <Star className="w-2.5 h-2.5 fill-white" />
+                          <span>{lang === 'bn' ? 'প্রধান' : 'Primary'}</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetPrimary(idx)}
+                          className="absolute bottom-1.5 left-1.5 right-1.5 py-1 px-1.5 rounded-lg bg-slate-900/80 hover:bg-emerald-600 text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity text-center backdrop-blur-xs"
+                        >
+                          {lang === 'bn' ? 'মূল ছবি করুন' : 'Set Primary'}
+                        </button>
                       )}
-                    </button>
-                  );
-                })}
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(idx)}
+                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 hover:bg-rose-600 text-white flex items-center justify-center transition-colors shadow-sm"
+                        title={lang === 'bn' ? 'ছবি মুছুন' : 'Remove image'}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Quick Presets Picker (if < 5 photos) */}
+            {images.length < 5 && (
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-600">
+                  {lang === 'bn' ? 'অথবা দ্রুত ডেমো ছবি যোগ করুন:' : 'Or quickly add standard crop presets:'}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  {PRESET_IMAGES.map((preset, idx) => {
+                    const isAlreadyAdded = images.includes(preset.url);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        disabled={isAlreadyAdded}
+                        onClick={() => handleAddPreset(preset.url)}
+                        className={`group relative rounded-xl overflow-hidden border p-1 flex items-center gap-2 transition-all text-left ${
+                          isAlreadyAdded
+                            ? 'opacity-40 bg-slate-100 border-slate-200 cursor-not-allowed'
+                            : 'border-slate-200 hover:border-emerald-400 bg-slate-50/60 hover:bg-emerald-50/30'
+                        }`}
+                      >
+                        <img
+                          src={preset.url}
+                          alt={preset.name}
+                          className="w-10 h-10 rounded-lg object-cover shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-bold text-slate-700 truncate">{preset.name}</p>
+                          <span className="text-[9px] text-emerald-600 font-semibold flex items-center gap-0.5">
+                            {isAlreadyAdded ? (
+                              <span>{lang === 'bn' ? 'যুক্ত আছে' : 'Added'}</span>
+                            ) : (
+                              <>
+                                <Plus className="w-2.5 h-2.5" />
+                                <span>{lang === 'bn' ? 'যোগ করুন' : 'Add'}</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Submit Action Bottom Bar */}
@@ -684,7 +911,7 @@ export default function SellerProductForm() {
               {/* Card Image Banner */}
               <div className="relative h-48 w-full overflow-hidden bg-slate-100">
                 <img
-                  src={formData.image_url || PRESET_IMAGES[0].url}
+                  src={images[0] || formData.image_url || PRESET_IMAGES[0].url}
                   alt={formData.title}
                   className="w-full h-full object-cover"
                 />
@@ -704,9 +931,17 @@ export default function SellerProductForm() {
                   )}
                 </div>
 
-                {/* Category Pill */}
-                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold">
-                  {lang === 'bn' ? selectedCategory.name_bn : selectedCategory.name_en}
+                {/* Category Pill & Photo Count */}
+                <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                  {images.length > 1 && (
+                    <span className="px-2 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold flex items-center gap-1">
+                      <Camera className="w-3 h-3" />
+                      <span>{images.length}</span>
+                    </span>
+                  )}
+                  <span className="px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-[10px] font-bold">
+                    {lang === 'bn' ? selectedCategory.name_bn : selectedCategory.name_en}
+                  </span>
                 </div>
               </div>
 
