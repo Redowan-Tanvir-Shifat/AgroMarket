@@ -3,6 +3,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const isRemoteDb = process.env.DB_HOST &&
+  process.env.DB_HOST !== 'localhost' &&
+  process.env.DB_HOST !== '127.0.0.1';
+
+const useSSL = process.env.DB_SSL === 'true' ||
+  process.env.DB_SSL === '1' ||
+  isRemoteDb;
+
 // Create connection pool targeting agromarket DB
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -14,9 +22,7 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   dateStrings: true,
-  ssl: (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1')
-    ? { rejectUnauthorized: false }
-    : undefined
+  ssl: useSSL ? { rejectUnauthorized: false } : undefined
 });
 
 export default pool;

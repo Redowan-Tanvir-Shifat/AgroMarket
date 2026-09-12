@@ -39,7 +39,18 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Health check endpoint
+// Root and Health check endpoints
+app.get('/', (req, res) => {
+  res.json({
+    status: 'OK',
+    message: 'AgroMarket API & Socket.io Server running smoothly 🌾',
+    endpoints: {
+      health: '/api/health',
+      products: '/api/products'
+    }
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'AgroMarket API & Socket.io Server running smoothly 🌾' });
 });
