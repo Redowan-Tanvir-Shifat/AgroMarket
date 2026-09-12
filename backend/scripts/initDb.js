@@ -135,6 +135,10 @@ async function initDatabase() {
         delivery_address TEXT,
         payment_status ENUM('PENDING', 'PAID', 'FAILED') DEFAULT 'PENDING',
         order_status ENUM('PENDING', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED', 'DELIVERED', 'CANCELLED') DEFAULT 'PENDING',
+        deleted_by_buyer TINYINT(1) DEFAULT 0,
+        deleted_by_seller TINYINT(1) DEFAULT 0,
+        is_deleted TINYINT(1) DEFAULT 0,
+        deleted_at TIMESTAMP NULL DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB;

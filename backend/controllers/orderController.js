@@ -161,11 +161,22 @@ export const getMyOrders = async (req, res) => {
   try {
     const buyerId = req.user ? req.user.id : 1;
 
-    // 1. Fetch orders (excluding orders deleted by this buyer)
-    const [orders] = await pool.query(
-      `SELECT * FROM orders WHERE buyer_id = ? AND deleted_by_buyer = 0 ORDER BY created_at DESC`,
-      [buyerId]
-    );
+    // 1. Fetch orders (excluding orders deleted by this buyer, with safe fallback)
+    let orders;
+    try {
+      const [orderRows] = await pool.query(
+        `SELECT * FROM orders WHERE buyer_id = ? AND (deleted_by_buyer = 0 OR deleted_by_buyer IS NULL) ORDER BY created_at DESC`,
+        [buyerId]
+      );
+      orders = orderRows;
+    } catch (colErr) {
+      // Graceful fallback in case deleted_by_buyer column is not present
+      const [orderRows] = await pool.query(
+        `SELECT * FROM orders WHERE buyer_id = ? ORDER BY created_at DESC`,
+        [buyerId]
+      );
+      orders = orderRows;
+    }
 
     if (orders.length === 0) {
       return res.json({ orders: [] });
