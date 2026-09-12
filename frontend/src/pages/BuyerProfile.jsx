@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useSocket } from '../context/SocketContext';
+import { getApiUrl } from '../config/api';
 import {
   User,
   Camera,
@@ -138,13 +139,7 @@ export default function BuyerProfile() {
     try {
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      let res;
-      try {
-        res = await axios.get('/api/auth/me', { headers });
-      } catch {
-        res = await axios.get('http://localhost:5000/api/auth/me', { headers });
-      }
+      const res = await axios.get(getApiUrl('/api/auth/me'), { headers });
 
       if (res?.data?.user) {
         const u = res.data.user;
@@ -172,13 +167,7 @@ export default function BuyerProfile() {
       setLoadingStats(true);
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      let res;
-      try {
-        res = await axios.get('/api/auth/buyer-stats', { headers });
-      } catch (proxyErr) {
-        res = await axios.get('http://localhost:5000/api/auth/buyer-stats', { headers });
-      }
+      const res = await axios.get(getApiUrl('/api/auth/buyer-stats'), { headers });
 
       if (res?.data?.success && res.data.stats) {
         setStats({
@@ -240,41 +229,23 @@ export default function BuyerProfile() {
       const uploadFormData = new FormData();
       uploadFormData.append('image', file);
 
-      let res;
-      try {
-        res = await axios.post('/api/upload/avatar', uploadFormData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        });
-      } catch (uploadErr) {
-        res = await axios.post('http://localhost:5000/api/upload/avatar', uploadFormData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          }
-        });
-      }
+      const res = await axios.post(getApiUrl('/api/upload/avatar'), uploadFormData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
 
       if (res.data?.success && res.data.url) {
         const newUrl = res.data.url;
         setFormData((prev) => ({ ...prev, avatar_url: newUrl }));
 
         // Automatically persist avatar change to user profile
-        try {
-          await axios.put(
-            '/api/auth/profile',
-            { ...formData, avatar_url: newUrl },
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-          );
-        } catch {
-          await axios.put(
-            'http://localhost:5000/api/auth/profile',
-            { ...formData, avatar_url: newUrl },
-            { headers: token ? { Authorization: `Bearer ${token}` } : {} }
-          );
-        }
+        await axios.put(
+          getApiUrl('/api/auth/profile'),
+          { ...formData, avatar_url: newUrl },
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
 
         updateUser({ avatar_url: newUrl });
         triggerNotice(
@@ -333,12 +304,7 @@ export default function BuyerProfile() {
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      let res;
-      try {
-        res = await axios.put('/api/auth/profile', formData, { headers });
-      } catch {
-        res = await axios.put('http://localhost:5000/api/auth/profile', formData, { headers });
-      }
+      const res = await axios.put(getApiUrl('/api/auth/profile'), formData, { headers });
 
       if (res.data?.success && res.data.user) {
         updateUser(res.data.user);
@@ -402,12 +368,7 @@ export default function BuyerProfile() {
         newPassword: passwordData.newPassword
       };
 
-      let res;
-      try {
-        res = await axios.put('/api/auth/change-password', payload, { headers });
-      } catch {
-        res = await axios.put('http://localhost:5000/api/auth/change-password', payload, { headers });
-      }
+      const res = await axios.put(getApiUrl('/api/auth/change-password'), payload, { headers });
 
       if (res.data?.success) {
         setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });

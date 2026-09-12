@@ -13,7 +13,10 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  dateStrings: true
+  dateStrings: true,
+  ssl: (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1')
+    ? { rejectUnauthorized: false }
+    : undefined
 });
 
 export default pool;

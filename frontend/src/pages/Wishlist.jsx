@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
 import FreshnessBadge from '../components/FreshnessBadge';
 import { formatHarvestAge } from '../utils/formatters';
+import { getApiUrl } from '../config/api';
 import {
   Bookmark,
   ShoppingCart,
@@ -34,7 +35,7 @@ export default function Wishlist() {
     try {
       setLoading(true);
       const token = localStorage.getItem('agromarket_token');
-      const res = await fetch('http://localhost:5000/api/wishlists', {
+      const res = await fetch(getApiUrl('/api/wishlists'), {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -52,7 +53,7 @@ export default function Wishlist() {
   const handleRemove = async (productId) => {
     try {
       const token = localStorage.getItem('agromarket_token');
-      await fetch(`http://localhost:5000/api/wishlists/${productId}`, {
+      await fetch(getApiUrl(`/api/wishlists/${productId}`), {
         method: 'DELETE',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})

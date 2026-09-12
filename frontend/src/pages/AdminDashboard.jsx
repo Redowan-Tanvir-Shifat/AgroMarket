@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getApiUrl } from '../config/api';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -58,21 +59,21 @@ export default function AdminDashboard() {
       const headers = { Authorization: `Bearer ${token}` };
 
       // 1. Overview KPIs
-      const overviewRes = await fetch('http://localhost:5000/api/admin/overview', { headers });
+      const overviewRes = await fetch(getApiUrl('/api/admin/overview'), { headers });
       if (overviewRes.ok) {
         const data = await overviewRes.json();
         setOverview(data);
       }
 
       // 2. Sellers list
-      const sellersRes = await fetch('http://localhost:5000/api/admin/sellers', { headers });
+      const sellersRes = await fetch(getApiUrl('/api/admin/sellers'), { headers });
       if (sellersRes.ok) {
         const data = await sellersRes.json();
         setSellers(data.sellers || []);
       }
 
       // 3. Price decay radar
-      const decayRes = await fetch('http://localhost:5000/api/admin/price-decay-radar', { headers });
+      const decayRes = await fetch(getApiUrl('/api/admin/price-decay-radar'), { headers });
       if (decayRes.ok) {
         const data = await decayRes.json();
         setDecayProducts(data.products || []);
@@ -115,7 +116,7 @@ export default function AdminDashboard() {
     try {
       setActionInProgress(sellerId);
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/admin/sellers/${sellerId}/verify`, {
+      const res = await fetch(getApiUrl(`/api/admin/sellers/${sellerId}/verify`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -134,7 +135,7 @@ export default function AdminDashboard() {
       );
 
       // Refresh overview
-      const overviewRes = await fetch('http://localhost:5000/api/admin/overview', {
+      const overviewRes = await fetch(getApiUrl('/api/admin/overview'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (overviewRes.ok) {

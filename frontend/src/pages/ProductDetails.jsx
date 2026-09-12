@@ -8,6 +8,7 @@ import FreshnessBadge from '../components/FreshnessBadge';
 import FarmerIdentityModal from '../components/FarmerIdentityModal';
 import ChatModal from '../components/ChatModal';
 import { formatHarvestAge } from '../utils/formatters';
+import { getApiUrl } from '../config/api';
 import {
   MapPin,
   MessageSquare,
@@ -104,7 +105,7 @@ export default function ProductDetails() {
   const fetchProductDetails = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:5000/api/products/${id}`);
+      const res = await fetch(getApiUrl(`/api/products/${id}`));
       if (!res.ok) throw new Error('Product not found or failed to load.');
       const data = await res.json();
       setProduct(data.product);
@@ -186,7 +187,7 @@ export default function ProductDetails() {
       const token = localStorage.getItem('agromarket_token');
 
       if (nextState) {
-        await fetch('http://localhost:5000/api/wishlists', {
+        await fetch(getApiUrl('/api/wishlists'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -195,7 +196,7 @@ export default function ProductDetails() {
           body: JSON.stringify({ productId: product.id })
         });
       } else {
-        await fetch(`http://localhost:5000/api/wishlists/${product.id}`, {
+        await fetch(getApiUrl(`/api/wishlists/${product.id}`), {
           method: 'DELETE',
           headers: {
             ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -218,7 +219,7 @@ export default function ProductDetails() {
       setSubmittingReview(true);
       // Simulated review post or API call
       const token = localStorage.getItem('agromarket_token');
-      const res = await fetch(`http://localhost:5000/api/reviews`, {
+      const res = await fetch(getApiUrl('/api/reviews'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -271,7 +272,7 @@ export default function ProductDetails() {
     try {
       setIsUpdatingReview(true);
       const token = localStorage.getItem('agromarket_token');
-      const res = await fetch(`http://localhost:5000/api/reviews/${reviewId}`, {
+      const res = await fetch(getApiUrl(`/api/reviews/${reviewId}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -325,7 +326,7 @@ export default function ProductDetails() {
     try {
       setIsDeletingReview(true);
       const token = localStorage.getItem('agromarket_token');
-      const res = await fetch(`http://localhost:5000/api/reviews/${reviewId}`, {
+      const res = await fetch(getApiUrl(`/api/reviews/${reviewId}`), {
         method: 'DELETE',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})

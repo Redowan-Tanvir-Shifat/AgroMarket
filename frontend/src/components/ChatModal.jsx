@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getApiUrl } from '../config/api';
 import {
   X,
   Send,
@@ -73,7 +74,7 @@ export default function ChatModal({
       try {
         setLoading(true);
         const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/chat/start', {
+        const res = await fetch(getApiUrl('/api/chat/start'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -94,7 +95,7 @@ export default function ChatModal({
           setConversationId(convId);
 
           // Fetch messages
-          const msgRes = await fetch(`http://localhost:5000/api/chat/conversations/${convId}/messages`, {
+          const msgRes = await fetch(getApiUrl(`/api/chat/conversations/${convId}/messages`), {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (msgRes.ok) {
@@ -189,7 +190,7 @@ export default function ChatModal({
 
     try {
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/chat/conversations/${conversationId}/messages`, {
+      const res = await fetch(getApiUrl(`/api/chat/conversations/${conversationId}/messages`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

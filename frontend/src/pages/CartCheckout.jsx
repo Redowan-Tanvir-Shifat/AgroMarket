@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useSocket } from '../context/SocketContext';
+import { getApiUrl } from '../config/api';
 import {
   ShoppingCart,
   Trash2,
@@ -118,7 +119,7 @@ export default function CartCheckout() {
         totalAmount: grandTotal
       };
 
-      const res = await fetch('http://localhost:5000/api/orders', {
+      const res = await fetch(getApiUrl('/api/orders'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
+import { SOCKET_URL, getApiUrl } from '../config/api';
 
 const SocketContext = createContext(null);
 
@@ -53,7 +54,7 @@ export function SocketProvider({ children }) {
     if (!user) return;
     try {
       const token = getAuthToken();
-      const res = await axios.get('http://localhost:5000/api/notifications', {
+      const res = await axios.get(getApiUrl('/api/notifications'), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { userId: user.id }
       });
@@ -77,7 +78,7 @@ export function SocketProvider({ children }) {
     try {
       const token = getAuthToken();
       if (!token) return;
-      const res = await axios.get('http://localhost:5000/api/chat/unread-count', {
+      const res = await axios.get(getApiUrl('/api/chat/unread-count'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.data?.success) {
@@ -92,7 +93,7 @@ export function SocketProvider({ children }) {
   const markAsRead = async (id) => {
     try {
       const token = getAuthToken();
-      await axios.patch(`http://localhost:5000/api/notifications/${id}/read`, {}, {
+      await axios.patch(getApiUrl(`/api/notifications/${id}/read`), {}, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { userId: user?.id }
       });
@@ -109,7 +110,7 @@ export function SocketProvider({ children }) {
   const markAllAsRead = async () => {
     try {
       const token = getAuthToken();
-      await axios.put('http://localhost:5000/api/notifications/read-all', {}, {
+      await axios.put(getApiUrl('/api/notifications/read-all'), {}, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { userId: user?.id }
       });
@@ -122,8 +123,7 @@ export function SocketProvider({ children }) {
 
   // 1. Initialize Socket.io connection
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const s = io(socketUrl, {
+    const s = io(SOCKET_URL, {
       reconnectionAttempts: 15,
       reconnectionDelay: 2000,
       transports: ['websocket', 'polling']

@@ -5,6 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import ChatModal from '../components/ChatModal';
+import { getApiUrl } from '../config/api';
 import {
   Package,
   Clock,
@@ -125,7 +126,7 @@ export default function BuyerOrders() {
     try {
       setLoading(true);
       const token = getAuthToken();
-      const res = await fetch('http://localhost:5000/api/orders/my-orders', {
+      const res = await fetch(getApiUrl('/api/orders/my-orders'), {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -145,7 +146,7 @@ export default function BuyerOrders() {
     try {
       setDeletingOrderId(orderId);
       const token = getAuthToken();
-      const res = await fetch(`http://localhost:5000/api/orders/${orderId}`, {
+      const res = await fetch(getApiUrl(`/api/orders/${orderId}`), {
         method: 'DELETE',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -190,7 +191,7 @@ export default function BuyerOrders() {
     try {
       setSubmittingReview(true);
       const token = getAuthToken();
-      const res = await fetch('http://localhost:5000/api/reviews', {
+      const res = await fetch(getApiUrl('/api/reviews'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +224,7 @@ export default function BuyerOrders() {
     try {
       setConfirmingOrderId(orderId);
       const token = getAuthToken();
-      const res = await fetch(`http://localhost:5000/api/orders/${orderId}/confirm-payment`, {
+      const res = await fetch(getApiUrl(`/api/orders/${orderId}/confirm-payment`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

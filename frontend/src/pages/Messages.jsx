@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getApiUrl } from '../config/api';
 import {
   MessageSquare,
   Search,
@@ -65,7 +66,7 @@ export default function Messages() {
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       if (!token) return;
 
-      const res = await fetch('http://localhost:5000/api/chat/conversations', {
+      const res = await fetch(getApiUrl('/api/chat/conversations'), {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Failed to fetch conversation list');
@@ -117,7 +118,7 @@ export default function Messages() {
       const startChat = async () => {
         try {
           const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
-          const res = await fetch('http://localhost:5000/api/chat/start', {
+          const res = await fetch(getApiUrl('/api/chat/start'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -162,7 +163,7 @@ export default function Messages() {
       try {
         setLoadingMessages(true);
         const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
-        const res = await fetch(`http://localhost:5000/api/chat/conversations/${activeConvId}/messages`, {
+        const res = await fetch(getApiUrl(`/api/chat/conversations/${activeConvId}/messages`), {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error('Failed to load messages');
@@ -316,7 +317,7 @@ export default function Messages() {
 
     try {
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/chat/conversations/${activeConvId}/messages`, {
+      const res = await fetch(getApiUrl(`/api/chat/conversations/${activeConvId}/messages`), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

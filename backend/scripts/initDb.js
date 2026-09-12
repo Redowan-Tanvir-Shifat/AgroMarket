@@ -9,18 +9,40 @@ const { DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME } = process.env;
 async function initDatabase() {
   console.log('🌱 Initializing AgroMarket Database...');
 
-  // Step 1: Connect without database selected to ensure DB exists
-  const connection = await mysql.createConnection({
-    host: DB_HOST || 'localhost',
-    port: parseInt(DB_PORT || '3306'),
-    user: DB_USER || 'root',
-    password: DB_PASSWORD || 'password'
-  });
+  const sslConfig = (process.env.DB_SSL === 'true' || process.env.DB_SSL === '1')
+    ? { rejectUnauthorized: false }
+    : undefined;
+
+  const targetDb = DB_NAME || 'agromarket';
+  let connection;
 
   try {
-    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-    console.log(`✅ Database '${DB_NAME}' created or verified.`);
-    await connection.changeUser({ database: DB_NAME });
+    // Attempt 1: Connect directly to target database
+    connection = await mysql.createConnection({
+      host: DB_HOST || 'localhost',
+      port: parseInt(DB_PORT || '3306'),
+      user: DB_USER || 'root',
+      password: DB_PASSWORD || 'password',
+      database: targetDb,
+      ssl: sslConfig
+    });
+    console.log(`✅ Connected to database '${targetDb}'.`);
+  } catch (connErr) {
+    console.log(`ℹ️ Direct connection failed, attempting server connection to create database...`);
+    // Attempt 2: Connect to server without DB and create it
+    connection = await mysql.createConnection({
+      host: DB_HOST || 'localhost',
+      port: parseInt(DB_PORT || '3306'),
+      user: DB_USER || 'root',
+      password: DB_PASSWORD || 'password',
+      ssl: sslConfig
+    });
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${targetDb}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
+    console.log(`✅ Database '${targetDb}' created or verified.`);
+    await connection.changeUser({ database: targetDb });
+  }
+
+  try {
 
     // Step 2: Create Tables
     console.log('📋 Creating SQL tables...');

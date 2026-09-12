@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import ProductCard from '../components/ProductCard';
 import FarmHeaderBanner from '../components/FarmHeaderBanner';
 import ChatModal from '../components/ChatModal';
+import { getApiUrl } from '../config/api';
 import {
   ShieldCheck,
   MapPin,
@@ -37,7 +38,7 @@ export default function SellerStorefront() {
   const fetchStorefront = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`http://localhost:5000/api/seller/storefront/${sellerId}`);
+      const res = await fetch(getApiUrl(`/api/seller/storefront/${sellerId}`));
       if (!res.ok) throw new Error('খামারের তথ্য পাওয়া যায়নি (Failed to load farm profile)');
       const data = await res.json();
       setSellerData(data);
