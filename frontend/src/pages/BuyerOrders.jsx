@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import { useCart } from '../context/CartContext';
 import ChatModal from '../components/ChatModal';
 import { getApiUrl } from '../config/api';
 import {
@@ -27,13 +28,16 @@ import {
   Sprout,
   User,
   Phone,
-  MessageSquare
+  MessageSquare,
+  RotateCcw,
+  ShoppingCart
 } from 'lucide-react';
 
 export default function BuyerOrders() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
   const { socket } = useSocket();
+  const { addToCart } = useCart();
   const navigate = useNavigate();
 
   const getAuthToken = () => localStorage.getItem('agromarket_token') || localStorage.getItem('token');
@@ -51,6 +55,38 @@ export default function BuyerOrders() {
 
   // Invoice Modal State
   const [printModalOrder, setPrintModalOrder] = useState(null);
+
+  // 1-Click Reorder Modal State & Handler
+  const [reorderModal, setReorderModal] = useState(null);
+
+  const handleReorder = (order) => {
+    if (!order?.items || order.items.length === 0) return;
+    let addedCount = 0;
+
+    order.items.forEach((item) => {
+      const productObj = {
+        id: item.product_id,
+        seller_id: item.seller_id,
+        title: item.title,
+        title_bn: item.title_bn,
+        image_url: item.image_url,
+        unit: item.unit || 'kg',
+        base_price_bdt: item.unit_price_at_purchase_bdt,
+        current_dynamic_price_bdt: item.unit_price_at_purchase_bdt,
+        farm_name: item.farm_name,
+        farm_district: item.farm_district,
+        stock_quantity: 999
+      };
+      addToCart(productObj, parseFloat(item.quantity) || 1, item.unit || 'kg');
+      addedCount += 1;
+    });
+
+    setReorderModal({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      count: addedCount
+    });
+  };
 
   // Chat with Farmer State
   const [activeChatSeller, setActiveChatSeller] = useState(null);
@@ -746,11 +782,23 @@ export default function BuyerOrders() {
                   </span>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-xs text-slate-500 block">{t('grandTotalLabel')}</span>
-                  <span className="text-xl font-black text-emerald-900">
-                    ৳{parseFloat(order.total_amount_bdt || order.total_bdt || 0).toLocaleString()}
-                  </span>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-xs text-slate-500 block">{t('grandTotalLabel')}</span>
+                    <span className="text-xl font-black text-emerald-900">
+                      ৳{parseFloat(order.total_amount_bdt || order.total_bdt || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleReorder(order)}
+                    className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                    title={lang === 'bn' ? 'এক ক্লিকে পুনরায় অর্ডার করুন' : 'Reorder all items in 1-click'}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>{lang === 'bn' ? 'পুনরায় অর্ডার' : 'Reorder'}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1111,6 +1159,68 @@ export default function BuyerOrders() {
           </div>
         );
       })(), document.body)}
+
+      {/* 1-Click Reorder Success Popup Modal */}
+      {reorderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-emerald-100 relative text-center animate-in zoom-in-95 duration-200">
+            {/* Close Button */}
+            <button
+              onClick={() => setReorderModal(null)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Success Animated Icon */}
+            <div className="w-18 h-18 rounded-3xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 ring-8 ring-emerald-50 shadow-inner">
+              <ShoppingCart className="w-9 h-9 text-emerald-600" />
+            </div>
+
+            {/* Title */}
+            <h3 className="text-xl font-black text-slate-900 mb-1">
+              {lang === 'bn' ? 'পণ্য কার্টে যোগ করা হয়েছে!' : 'Items Reordered to Cart!'}
+            </h3>
+
+            {/* Order Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-mono font-bold mb-3 border border-slate-200">
+              <span className="text-slate-500">{lang === 'bn' ? 'অর্ডার:' : 'Order:'}</span>
+              <span className="text-emerald-700 font-extrabold">{reorderModal.orderNumber}</span>
+            </div>
+
+            {/* Description */}
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
+              {lang === 'bn'
+                ? `এই অর্ডার থেকে ${reorderModal.count}টি তাজা কৃষি পণ্য সফলভাবে আপনার কার্টে জমা করা হয়েছে। আপনি এখনই কার্ট দেখে চেকআউট সম্পন্ন করতে পারেন।`
+                : `${reorderModal.count} fresh agricultural items from this order have been added to your cart. Ready to proceed to checkout!`}
+            </p>
+
+            {/* Action Buttons */}
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setReorderModal(null);
+                  navigate('/checkout');
+                }}
+                className="w-full py-3.5 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>{lang === 'bn' ? 'কার্ট ও চেকআউট দেখুন' : 'View Cart & Checkout'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setReorderModal(null)}
+                className="w-full py-3 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                <span>{lang === 'bn' ? 'অর্ডার তালিকায় থাকুন' : 'Stay on Orders List'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Real-Time Live Chat Modal with Farmer */}
       {activeChatSeller && (

@@ -43,6 +43,13 @@
 
 ---
 
+### 4. 1-Click Repeat Buyer Reorder Engine (`/buyer/orders`)
+* **Frictionless Reordering**: Added a 1-click **"Reorder" (পুনরায় অর্ডার করুন)** button to both the header and footer of every past order card.
+* **Instant Cart Hydration**: Automatically maps all produce items, quantities, and measurement units (`kg` / `mon`) from previous orders into the active shopping cart (`useCart()`).
+* **Interactive Feedback**: Displays an animated success toast with order number and direct CTA navigation to `/cart` for instant checkout.
+
+---
+
 ## 🎯 Next Day (Day 6) Focus
 
 1. **Comprehensive Admin Panel**:

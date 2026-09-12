@@ -203,7 +203,7 @@ gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
 
 ---
 
-## 8. Order Lifecycle, COD & Challan Slip Invoicing
+## 8. Order Lifecycle, COD, Challan Invoicing & 1-Click Reorder Engine
 
 ### 📦 Order Lifecycle State Machine:
 ```
@@ -211,6 +211,11 @@ gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
     ⬇
 [CANCELLED]
 ```
+
+### 🔁 1-Click Repeat Buyer Reorder Engine (`/buyer/orders`):
+* **Frictionless Reordering**: Repeat buyers can reorder any previous basket of agricultural produce with a single click.
+* **Auto-Cart Hydration**: Iterates through all items from past orders and invokes `addToCart(product, quantity, unit)`, preserving the original quantities and measurement units (`kg` or `mon`).
+* **Interactive Feedback & Direct Checkout**: Displays an animated confirmation banner showing the order number and count of re-added items, with a direct 1-click CTA button navigating to `/cart` for instant checkout.
 
 ### 🧾 Professional Agricultural Challan Slip:
 * Formatted according to Bangladeshi commercial trading standards.
