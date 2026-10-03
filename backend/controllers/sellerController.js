@@ -712,10 +712,15 @@ export const getSellerOrders = async (req, res) => {
     const [orders] = await pool.query(
       `SELECT o.id, o.order_number, o.buyer_id, o.total_amount_bdt, o.fulfillment_type,
               o.payment_method, o.payment_status, o.order_status, o.delivery_address,
-              o.created_at,
-              u.id as buyer_user_id, u.full_name as buyer_name, u.phone as buyer_phone, u.email as buyer_email
+              o.created_at, o.rider_id, o.rider_assigned_at, o.rider_accepted_at,
+              o.buyer_paid_confirmed, o.rider_paid_confirmed,
+              u.id as buyer_user_id, u.full_name as buyer_name, u.phone as buyer_phone, u.email as buyer_email,
+              r.vehicle_type as rider_vehicle, r.vehicle_number as rider_vehicle_number,
+              ru.full_name as rider_name, ru.phone as rider_phone
        FROM orders o
        JOIN users u ON o.buyer_id = u.id
+       LEFT JOIN riders r ON o.rider_id = r.id
+       LEFT JOIN users ru ON r.user_id = ru.id
        WHERE o.id IN (SELECT DISTINCT order_id FROM order_items WHERE seller_id = ?)
          AND o.deleted_by_seller = 0
        ORDER BY o.created_at DESC`,

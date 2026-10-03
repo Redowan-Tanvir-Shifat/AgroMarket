@@ -29,6 +29,11 @@ export const verifyToken = async (req, res, next) => {
       if (sellers.length > 0) {
         req.user.sellerProfile = sellers[0];
       }
+    } else if (req.user.role === 'rider') {
+      const [riders] = await pool.query('SELECT * FROM riders WHERE user_id = ?', [req.user.id]);
+      if (riders.length > 0) {
+        req.user.riderProfile = riders[0];
+      }
     }
 
     next();
@@ -44,4 +49,41 @@ export const requireRole = (...roles) => {
     }
     next();
   };
+};
+
+export const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'agromarket_bangladesh_secret_key_2026');
+
+    // Fetch user from DB
+    const [users] = await pool.query(
+      'SELECT id, full_name, email, phone, role, division, district, upazila, address, avatar_url FROM users WHERE id = ?',
+      [decoded.userId]
+    );
+
+    if (users.length > 0) {
+      req.user = users[0];
+      if (req.user.role === 'seller') {
+        const [sellers] = await pool.query('SELECT * FROM sellers WHERE user_id = ?', [req.user.id]);
+        if (sellers.length > 0) {
+          req.user.sellerProfile = sellers[0];
+        }
+      } else if (req.user.role === 'rider') {
+        const [riders] = await pool.query('SELECT * FROM riders WHERE user_id = ?', [req.user.id]);
+        if (riders.length > 0) {
+          req.user.riderProfile = riders[0];
+        }
+      }
+    }
+  } catch (err) {
+    // In optional authentication, invalid or expired tokens do not block the request
+    // req.user will remain undefined so downstream can fallback to guest/query params
+  }
+  next();
 };

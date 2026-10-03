@@ -30,7 +30,8 @@ import {
   Phone,
   MessageSquare,
   RotateCcw,
-  ShoppingCart
+  ShoppingCart,
+  Bike
 } from 'lucide-react';
 
 export default function BuyerOrders() {
@@ -144,25 +145,84 @@ export default function BuyerOrders() {
     fetchOrders();
   }, []);
 
-  // Real-time automatic order list update when seller changes status
+  // Real-time listener for order status changes and COD payment handshake
   useEffect(() => {
     if (!socket) return;
+
+    if (user?.id) {
+      socket.emit('join_user', user.id);
+    }
+
     const handleOrderNotification = (notif) => {
       if (notif?.type === 'ORDER_STATUS' || notif?.link?.includes('/account/orders')) {
-        fetchOrders();
+        fetchOrders(true);
       }
     };
+
+    const handleOrderEvent = (data) => {
+      // 1. Instant in-memory state update so badges & buttons reflect live without flash
+      if (data?.orderId) {
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id === data.orderId) {
+              const newOrderStatus = data.orderStatus || data.newStatus || o.order_status;
+              const newPaymentStatus =
+                data.paymentStatus ||
+                (newOrderStatus === 'DELIVERED' ? 'PAID' : o.payment_status);
+
+              return {
+                ...o,
+                order_status: newOrderStatus,
+                payment_status: newPaymentStatus,
+                buyer_paid_confirmed:
+                  data.buyer_paid_confirmed !== undefined
+                    ? data.buyer_paid_confirmed
+                    : o.buyer_paid_confirmed,
+                rider_paid_confirmed:
+                  data.rider_paid_confirmed !== undefined
+                    ? data.rider_paid_confirmed
+                    : o.rider_paid_confirmed,
+                rider: data.riderName
+                  ? {
+                      ...(o.rider || {}),
+                      full_name: data.riderName,
+                      phone: data.riderPhone || o.rider?.phone,
+                      vehicle_type: data.vehicleType || o.rider?.vehicle_type
+                    }
+                  : o.rider
+              };
+            }
+            return o;
+          })
+        );
+      }
+      // 2. Silently sync from database
+      fetchOrders(true);
+    };
+
     socket.on('new_notification', handleOrderNotification);
+    socket.on('order_status_updated', handleOrderEvent);
+    socket.on('order_updated', handleOrderEvent);
+    socket.on('rider_payment_confirmed', handleOrderEvent);
+    socket.on('buyer_payment_confirmed', handleOrderEvent);
+    socket.on('payment_handshake_complete', handleOrderEvent);
+
     return () => {
       socket.off('new_notification', handleOrderNotification);
+      socket.off('order_status_updated', handleOrderEvent);
+      socket.off('order_updated', handleOrderEvent);
+      socket.off('rider_payment_confirmed', handleOrderEvent);
+      socket.off('buyer_payment_confirmed', handleOrderEvent);
+      socket.off('payment_handshake_complete', handleOrderEvent);
     };
-  }, [socket]);
+  }, [socket, user]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const token = getAuthToken();
-      const res = await fetch(getApiUrl('/api/orders/my-orders'), {
+      const url = user?.id ? getApiUrl(`/api/orders/my-orders?userId=${user.id}`) : getApiUrl('/api/orders/my-orders');
+      const res = await fetch(url, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         }
@@ -173,7 +233,40 @@ export default function BuyerOrders() {
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
+    }
+  };
+
+  // Buyer Confirms Cash Payment to Rider (COD Live Handshake)
+  const handleBuyerConfirmPayment = async (orderId) => {
+    try {
+      setConfirmingOrderId(orderId);
+      const token = getAuthToken();
+      const res = await fetch(getApiUrl('/api/rider/confirm-buyer-payment'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ orderId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPaymentNotice({
+          type: 'success',
+          message: data.message
+        });
+        fetchOrders();
+      } else {
+        throw new Error(data.message || 'Payment confirmation failed');
+      }
+    } catch (err) {
+      setPaymentNotice({
+        type: 'error',
+        message: err.message
+      });
+    } finally {
+      setConfirmingOrderId(null);
     }
   };
 
@@ -308,7 +401,7 @@ export default function BuyerOrders() {
     if (activeTab === 'ALL') return true;
     if (activeTab === 'ACTIVE') {
       // If COD payment is pending, keep it in ACTIVE tab even if seller marked DELIVERED
-      return ['PENDING', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED'].includes(order.order_status) || (order.order_status === 'DELIVERED' && isCodPending);
+      return ['PENDING', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED', 'RIDER_ASSIGNED', 'DELIVERED_TO_RIDER'].includes(order.order_status) || (order.order_status === 'DELIVERED' && isCodPending);
     }
     if (activeTab === 'DELIVERED') {
       // Show in DELIVERED tab when order reaches DELIVERED status
@@ -358,6 +451,20 @@ export default function BuyerOrders() {
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-900 border border-sky-300">
             <Truck className="w-3.5 h-3.5 text-sky-600" />
             {t('orderStatusDispatched')}
+          </span>
+        );
+      case 'RIDER_ASSIGNED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+            <Clock className="w-3.5 h-3.5 text-amber-600 animate-spin" />
+            {lang === 'bn' ? 'রাইডার বরাদ্দ হয়েছে' : 'Rider Assigned'}
+          </span>
+        );
+      case 'DELIVERED_TO_RIDER':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-900 border border-sky-300">
+            <Bike className="w-3.5 h-3.5 text-sky-600" />
+            {lang === 'bn' ? 'রাইডারের নিকট হস্তান্তরকৃত (ডেলিভারির পথে)' : 'Handed to Rider (Out for Delivery)'}
           </span>
         );
       case 'DELIVERED':
@@ -438,7 +545,7 @@ export default function BuyerOrders() {
               : 'bg-white text-slate-600 hover:bg-emerald-50 border border-slate-200'
           }`}
         >
-          {t('activeOrdersTab')} ({orders.filter(o => ['PENDING', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED'].includes(o.order_status) || (o.order_status === 'DELIVERED' && o.payment_method === 'COD' && o.payment_status === 'PENDING')).length})
+          {t('activeOrdersTab')} ({orders.filter(o => ['PENDING', 'PROCESSING', 'READY_FOR_PICKUP', 'SHIPPED', 'RIDER_ASSIGNED', 'DELIVERED_TO_RIDER'].includes(o.order_status) || (o.order_status === 'DELIVERED' && o.payment_method === 'COD' && o.payment_status === 'PENDING')).length})
         </button>
         <button
           onClick={() => setActiveTab('DELIVERED')}
@@ -553,13 +660,17 @@ export default function BuyerOrders() {
                   </div>
                   <div
                     className={`flex items-center justify-center gap-1.5 ${
-                      ['READY_FOR_PICKUP', 'SHIPPED', 'DELIVERED'].includes(order.order_status)
+                      ['READY_FOR_PICKUP', 'SHIPPED', 'RIDER_ASSIGNED', 'DELIVERED_TO_RIDER', 'DELIVERED'].includes(order.order_status)
                         ? 'text-emerald-700'
                         : 'text-slate-400'
                     }`}
                   >
                     <Truck className="w-4 h-4 shrink-0" />
-                    <span>{lang === 'bn' ? '২. খামার থেকে প্রেরণ' : '2. Dispatched from Farm'}</span>
+                    <span>
+                      {order.order_status === 'DELIVERED_TO_RIDER'
+                        ? (lang === 'bn' ? '২. রাইডারের নিকট হস্তান্তর' : '2. With Rider')
+                        : (lang === 'bn' ? '২. খামার থেকে প্রেরণ' : '2. Dispatched from Farm')}
+                    </span>
                   </div>
                   <div
                     className={`flex items-center justify-center gap-1.5 ${
@@ -767,6 +878,118 @@ export default function BuyerOrders() {
                   </div>
                 ))}
               </div>
+
+              {/* Rider Details & Live Payment Handshake Box */}
+              {(order.rider || order.rider_name || order.order_status === 'DELIVERED_TO_RIDER' || order.order_status === 'RIDER_ASSIGNED') && (
+                <div className="mx-6 mb-4 p-4 sm:p-5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-sm">
+                        <Bike className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold text-sky-800 uppercase tracking-wider block">
+                          {order.order_status === 'RIDER_ASSIGNED'
+                            ? (lang === 'bn' ? 'রাইডার বরাদ্দ হয়েছে (খামার থেকে সংগ্রহের পথে)' : 'Rider Assigned')
+                            : (lang === 'bn' ? 'নির্ধারিত ডেলিভারি রাইডার' : 'Assigned Delivery Rider')}
+                        </span>
+                        <h4 className="text-sm font-extrabold text-slate-900 leading-tight">
+                          {order.rider?.name || order.rider_name || 'এগ্রোমার্কেট রাইডার'}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {(order.rider?.phone || order.rider_phone) && (
+                        <a
+                          href={`tel:${order.rider?.phone || order.rider_phone}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs transition-colors"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          <span>{lang === 'bn' ? 'রাইডারকে কল দিন' : 'Call Rider'}</span>
+                        </a>
+                      )}
+                      <span className="text-xs px-2.5 py-1 rounded-xl bg-white border border-sky-200 text-sky-800 font-bold">
+                        {order.rider?.vehicleType === 'BICYCLE' ? '🚲 বাইসাইকেল' : order.rider?.vehicleType === 'VAN' ? '🚚 ভ্যান' : '🏍️ মোটরসাইকেল'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* LIVE COD PAYMENT HANDSHAKE */}
+                  {order.payment_method === 'COD' && order.order_status === 'DELIVERED_TO_RIDER' && (
+                    <div className="mt-3 pt-3 border-t border-sky-200/80 space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-600 font-bold">
+                          {lang === 'bn' ? 'ক্যাশ অন ডেলিভারি (COD) লাইভ পেমেন্ট:' : 'Cash on Delivery Live Handshake:'}
+                        </span>
+                        <span className="font-extrabold text-emerald-800">
+                          ৳{parseFloat(order.total_amount_bdt || 0).toLocaleString()}
+                        </span>
+                      </div>
+
+                      {/* Dual Status Indicators */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                          order.buyer_paid_confirmed === 1
+                            ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold'
+                            : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
+                          {order.buyer_paid_confirmed === 1 ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
+                          )}
+                          <span>
+                            {order.buyer_paid_confirmed === 1
+                              ? (lang === 'bn' ? 'আপনি পেমেন্ট দিয়েছেন ✓' : 'You confirmed payment ✓')
+                              : (lang === 'bn' ? 'আপনার পেমেন্ট কনফার্মেশনের অপেক্ষা' : 'Waiting for your confirmation')}
+                          </span>
+                        </div>
+
+                        <div className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                          order.rider_paid_confirmed === 1
+                            ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold'
+                            : 'bg-white border-slate-200 text-slate-600'
+                        }`}>
+                          {order.rider_paid_confirmed === 1 ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          ) : (
+                            <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
+                          )}
+                          <span>
+                            {order.rider_paid_confirmed === 1
+                              ? (lang === 'bn' ? 'রাইডার ক্যাশ বুঝে পেয়েছেন ✓' : 'Rider received cash ✓')
+                              : (lang === 'bn' ? 'রাইডারের অনুমোদনের অপেক্ষা' : 'Waiting for rider to receive')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Buyer Action Button */}
+                      {order.buyer_paid_confirmed !== 1 ? (
+                        <button
+                          type="button"
+                          onClick={() => handleBuyerConfirmPayment(order.id)}
+                          disabled={confirmingOrderId === order.id}
+                          className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-extrabold text-xs sm:text-sm shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {confirmingOrderId === order.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Check className="w-4 h-4 stroke-[3]" />
+                          )}
+                          <span>{lang === 'bn' ? 'রাইডারকে ক্যাশ টাকা প্রদান করেছি' : 'Confirm Cash Paid to Rider'}</span>
+                        </button>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-emerald-100/70 border border-emerald-300 text-emerald-900 text-xs font-bold text-center">
+                          {lang === 'bn'
+                            ? '✓ আপনি পেমেন্ট নিশ্চিত করেছেন। রাইডার ক্যাশ গ্রহণ কনফার্ম করলেই ডেলিভারি সম্পন্ন হবে।'
+                            : '✓ You confirmed payment. Awaiting rider confirmation to finalize delivery.'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Card Footer: Delivery Destination & Total */}
               <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs sm:text-sm">

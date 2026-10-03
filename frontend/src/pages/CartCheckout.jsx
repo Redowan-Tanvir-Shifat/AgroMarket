@@ -19,7 +19,8 @@ import {
   ArrowLeft,
   X,
   Sparkles,
-  Check
+  Check,
+  AlertCircle
 } from 'lucide-react';
 
 export default function CartCheckout() {
@@ -129,7 +130,16 @@ export default function CartCheckout() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Order placement failed');
+      if (!res.ok) {
+        if (res.status === 401 || (data.message && data.message.toLowerCase().includes('token'))) {
+          throw new Error(
+            lang === 'bn'
+              ? 'আপনার লগইন সেশনের মেয়াদ শেষ হয়েছে। অনুগ্রহ করে আবার লগইন করে অর্ডার করুন।'
+              : 'Your login session has expired. Please log in again to complete checkout.'
+          );
+        }
+        throw new Error(data.message || 'Order placement failed');
+      }
 
       // Success
       setOrderSuccess(data.order);
@@ -660,14 +670,33 @@ export default function CartCheckout() {
 
             {/* Error banner above button */}
             {checkoutError && (
-              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-start gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <span>{checkoutError}</span>
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium space-y-2.5 animate-in fade-in">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1 font-bold leading-relaxed">
+                    <span>{checkoutError}</span>
+                  </div>
+                  <button type="button" onClick={() => setCheckoutError(null)} className="text-rose-400 hover:text-rose-700">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button type="button" onClick={() => setCheckoutError(null)}>
-                  <X className="w-3.5 h-3.5 text-rose-500" />
-                </button>
+                {(checkoutError.toLowerCase().includes('লগইন') ||
+                  checkoutError.toLowerCase().includes('login') ||
+                  checkoutError.toLowerCase().includes('token') ||
+                  checkoutError.toLowerCase().includes('session') ||
+                  checkoutError.toLowerCase().includes('expired')) && (
+                  <div className="pt-2 border-t border-rose-200 flex items-center justify-between">
+                    <span className="text-[11px] text-rose-600">
+                      {lang === 'bn' ? 'লগইন পেজে যেতে ক্লিক করুন:' : 'Go to login page:'}
+                    </span>
+                    <Link
+                      to="/login?redirect=/checkout"
+                      className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold shadow-sm transition-all"
+                    >
+                      {lang === 'bn' ? 'লগইন করুন' : 'Log In Now'}
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 

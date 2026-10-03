@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Sprout, ShoppingBag, ShieldCheck, User, Phone, Mail, Lock, MapPin, Building2, CreditCard, ArrowRight, AlertCircle } from 'lucide-react';
+import { Sprout, ShoppingBag, ShieldCheck, User, Phone, Mail, Lock, MapPin, Building2, CreditCard, ArrowRight, AlertCircle, Bike } from 'lucide-react';
 
 const DIVISIONS = [
   'Dhaka', 'Rajshahi', 'Rangpur', 'Chattogram', 'Khulna', 'Barishal', 'Sylhet', 'Mymensingh'
@@ -44,6 +44,11 @@ export default function Register() {
   const [nidTradeLicense, setNidTradeLicense] = useState('');
   const [payoutMethod, setPayoutMethod] = useState('BKASH');
   const [payoutNumber, setPayoutNumber] = useState('');
+
+  // Rider specific inputs
+  const [vehicleType, setVehicleType] = useState('MOTORCYCLE');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [riderLicenseNid, setRiderLicenseNid] = useState('');
 
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -104,6 +109,11 @@ export default function Register() {
         nidTradeLicense,
         payoutMethod,
         payoutNumber: payoutNumber || phone
+      }),
+      ...(role === 'rider' && {
+        vehicleType,
+        vehicleNumber,
+        licenseNid: riderLicenseNid
       })
     };
 
@@ -111,6 +121,8 @@ export default function Register() {
     if (res.success) {
       if (role === 'seller') {
         navigate('/seller/dashboard');
+      } else if (role === 'rider') {
+        navigate('/rider/dashboard');
       } else {
         navigate('/');
       }
@@ -137,31 +149,44 @@ export default function Register() {
         </div>
 
         {/* Multi-Role Registration Tab Switcher */}
-        <div className="grid grid-cols-2 gap-3 p-2 bg-slate-100 rounded-2xl mb-8 border border-slate-200">
+        <div className="grid grid-cols-3 gap-2 p-1.5 bg-slate-100 rounded-2xl mb-8 border border-slate-200">
           <button
             type="button"
             onClick={() => setRole('buyer')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center justify-center gap-2 outline-none ${
+            className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center justify-center gap-1.5 outline-none cursor-pointer ${
               role === 'buyer'
                 ? 'bg-white text-emerald-700 shadow-md border-emerald-200'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <ShoppingBag className="w-4 h-4 text-emerald-600" />
-            <span>{t('buyerAccount')}</span>
+            <ShoppingBag className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="truncate">{t('buyerAccount')}</span>
           </button>
           
           <button
             type="button"
             onClick={() => setRole('seller')}
-            className={`py-3 px-4 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center justify-center gap-2 outline-none ${
+            className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center justify-center gap-1.5 outline-none cursor-pointer ${
               role === 'seller'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 border-emerald-600'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <ShieldCheck className="w-4 h-4 text-emerald-200" />
-            <span>{t('farmerAccount')}</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-200 shrink-0" />
+            <span className="truncate">{t('farmerAccount')}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRole('rider')}
+            className={`py-3 px-2 text-xs sm:text-sm font-bold rounded-xl transition-all border flex items-center justify-center gap-1.5 outline-none cursor-pointer ${
+              role === 'rider'
+                ? 'bg-sky-600 text-white shadow-md shadow-sky-600/25 border-sky-600'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Bike className="w-4 h-4 text-sky-200 shrink-0" />
+            <span className="truncate">ডেলিভারি রাইডার</span>
           </button>
         </div>
 
@@ -422,6 +447,54 @@ export default function Register() {
                     />
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rider Specific Fields */}
+          {role === 'rider' && (
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-sky-800 border-b border-sky-100 pb-2 flex items-center gap-2">
+                <Bike className="w-4 h-4 text-sky-600" />
+                <span>২. রাইডার ও যানবাহনের তথ্য (Rider & Vehicle Details)</span>
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">যানবাহনের ধরন (Vehicle Type)</label>
+                  <select
+                    value={vehicleType}
+                    onChange={(e) => setVehicleType(e.target.value)}
+                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:bg-white"
+                  >
+                    <option value="MOTORCYCLE">🏍️ মোটরসাইকেল (Motorcycle)</option>
+                    <option value="BICYCLE">🚲 বাইসাইকেল (Bicycle)</option>
+                    <option value="VAN">🛺 ভ্যান / ইজিবাইক (Van)</option>
+                    <option value="PICKUP_VAN">🚚 পিকআপ ভ্যান (Pickup Van)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">গাড়ি / বাইকের নম্বর (Vehicle Reg Number)</label>
+                  <input
+                    type="text"
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value)}
+                    placeholder="যেমন: ঢাকা মেট্রো-হ ১২-৩৪৫৬"
+                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">জাতীয় পরিচয়পত্র বা লাইসেন্স নম্বর (NID / License)</label>
+                <input
+                  type="text"
+                  value={riderLicenseNid}
+                  onChange={(e) => setRiderLicenseNid(e.target.value)}
+                  placeholder="NID নম্বর বা ড্রাইভিং লাইসেন্স"
+                  className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:bg-white"
+                />
               </div>
             </div>
           )}

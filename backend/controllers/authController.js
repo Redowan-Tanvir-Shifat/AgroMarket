@@ -26,7 +26,11 @@ export const register = async (req, res) => {
       farmAddress,
       nidTradeLicense,
       payoutMethod = 'BKASH',
-      payoutNumber
+      payoutNumber,
+      // Rider specific fields
+      vehicleType = 'MOTORCYCLE',
+      vehicleNumber,
+      licenseNid
     } = req.body;
 
     // Validation
@@ -100,8 +104,28 @@ export const register = async (req, res) => {
       sellerProfile = sellers[0];
     }
 
-    // Generate Token
-    const token = jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '7d' });
+    let riderProfile = null;
+    // If Rider, Insert into Riders profile table
+    if (role === 'rider') {
+      const [riderResult] = await pool.query(
+        `INSERT INTO riders (user_id, vehicle_type, vehicle_number, license_nid, status, division, district, upazila)
+         VALUES (?, ?, ?, ?, 'IDLE', ?, ?, ?)`,
+        [
+          userId,
+          vehicleType || 'MOTORCYCLE',
+          vehicleNumber || '',
+          licenseNid || '',
+          division || 'Dhaka',
+          district || 'Dhaka',
+          upazila || ''
+        ]
+      );
+      const [riders] = await pool.query('SELECT * FROM riders WHERE id = ?', [riderResult.insertId]);
+      riderProfile = riders[0];
+    }
+
+    // Generate Token (30 days validity for smooth evaluation and testing)
+    const token = jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '30d' });
 
     const userObj = {
       id: userId,
@@ -114,7 +138,8 @@ export const register = async (req, res) => {
       upazila,
       address,
       avatar_url: null,
-      sellerProfile
+      sellerProfile,
+      riderProfile
     };
 
     return res.status(201).json({
@@ -157,15 +182,21 @@ export const login = async (req, res) => {
     }
 
     let sellerProfile = null;
+    let riderProfile = null;
     if (user.role === 'seller') {
       const [sellers] = await pool.query('SELECT * FROM sellers WHERE user_id = ?', [user.id]);
       if (sellers.length > 0) {
         sellerProfile = sellers[0];
       }
+    } else if (user.role === 'rider') {
+      const [riders] = await pool.query('SELECT * FROM riders WHERE user_id = ?', [user.id]);
+      if (riders.length > 0) {
+        riderProfile = riders[0];
+      }
     }
 
-    // Generate JWT
-    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    // Generate JWT (30 days validity for smooth evaluation and testing)
+    const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '30d' });
 
     const userObj = {
       id: user.id,
@@ -178,7 +209,8 @@ export const login = async (req, res) => {
       upazila: user.upazila,
       address: user.address,
       avatar_url: user.avatar_url || null,
-      sellerProfile
+      sellerProfile,
+      riderProfile
     };
 
     return res.json({

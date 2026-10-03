@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import { getApiUrl } from '../config/api';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -33,7 +34,8 @@ import {
   Filter,
   Layers,
   Trash2,
-  Sprout
+  Sprout,
+  Bike
 } from 'lucide-react';
 
 export default function SellerOrders() {
@@ -59,6 +61,13 @@ export default function SellerOrders() {
   const [deleteModalOrder, setDeleteModalOrder] = useState(null);
   const [deletingOrderId, setDeletingOrderId] = useState(null);
   const [activeChatBuyer, setActiveChatBuyer] = useState(null);
+
+  // Rider Assignment Modal States
+  const [riderModalOrder, setRiderModalOrder] = useState(null);
+  const [availableRiders, setAvailableRiders] = useState([]);
+  const [loadingRiders, setLoadingRiders] = useState(false);
+  const [assigningRiderId, setAssigningRiderId] = useState(null);
+  const [riderSearchQuery, setRiderSearchQuery] = useState('');
 
   // Helper to resolve seller/farm details for invoice
   const getSellerInfo = (id) => {
@@ -104,29 +113,85 @@ export default function SellerOrders() {
   };
 
   useEffect(() => {
+    if (user?.sellerProfile?.id) {
+      setSelectedSellerId(user.sellerProfile.id);
+    }
+  }, [user]);
+
+  useEffect(() => {
     fetchOrders(selectedSellerId);
   }, [selectedSellerId]);
 
-  // Real-time automatic orders table update when a new order arrives
+  // Real-time automatic orders table update when order status or payment changes
   useEffect(() => {
     if (!socket) return;
     if (selectedSellerId) {
       socket.emit('join_seller', selectedSellerId);
     }
-    const handleOrderEvent = () => {
-      fetchOrders(selectedSellerId);
+    if (user?.id) {
+      socket.emit('join_user', user.id);
+    }
+
+    const handleOrderEvent = (data) => {
+      // 1. Immediately update in-memory state for instant UI reaction (no delay, no reload)
+      if (data?.orderId) {
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id === data.orderId) {
+              const newOrderStatus = data.orderStatus || data.newStatus || o.order_status;
+              const newPaymentStatus =
+                data.paymentStatus ||
+                (newOrderStatus === 'DELIVERED' ? 'PAID' : o.payment_status);
+
+              return {
+                ...o,
+                order_status: newOrderStatus,
+                payment_status: newPaymentStatus,
+                buyer_paid_confirmed:
+                  data.buyer_paid_confirmed !== undefined
+                    ? data.buyer_paid_confirmed
+                    : o.buyer_paid_confirmed,
+                rider_paid_confirmed:
+                  data.rider_paid_confirmed !== undefined
+                    ? data.rider_paid_confirmed
+                    : o.rider_paid_confirmed,
+                rider_name: data.riderName || o.rider_name,
+                rider_phone: data.riderPhone || o.rider_phone,
+                rider_vehicle: data.vehicleType || o.rider_vehicle
+              };
+            }
+            return o;
+          })
+        );
+      }
+      // 2. Silently fetch from server to ensure 100% database consistency without showing loading spinner
+      fetchOrders(selectedSellerId, true);
     };
+
     socket.on('new_order_alert', handleOrderEvent);
     socket.on('new_notification', handleOrderEvent);
+    socket.on('ride_accepted', handleOrderEvent);
+    socket.on('payment_handshake_complete', handleOrderEvent);
+    socket.on('order_updated', handleOrderEvent);
+    socket.on('order_status_updated', handleOrderEvent);
+    socket.on('buyer_payment_confirmed', handleOrderEvent);
+    socket.on('rider_payment_confirmed', handleOrderEvent);
+
     return () => {
       socket.off('new_order_alert', handleOrderEvent);
       socket.off('new_notification', handleOrderEvent);
+      socket.off('ride_accepted', handleOrderEvent);
+      socket.off('payment_handshake_complete', handleOrderEvent);
+      socket.off('order_updated', handleOrderEvent);
+      socket.off('order_status_updated', handleOrderEvent);
+      socket.off('buyer_payment_confirmed', handleOrderEvent);
+      socket.off('rider_payment_confirmed', handleOrderEvent);
     };
-  }, [socket, selectedSellerId]);
+  }, [socket, selectedSellerId, user]);
 
-  const fetchOrders = async (sellerId) => {
+  const fetchOrders = async (sellerId, isSilent = false) => {
     try {
-      setLoading(true);
+      if (!isSilent) setLoading(true);
       const token = localStorage.getItem('agromarket_token') || localStorage.getItem('token');
       const res = await axios.get(`/api/seller/orders?sellerId=${sellerId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
@@ -135,7 +200,7 @@ export default function SellerOrders() {
     } catch (err) {
       console.error('Failed to fetch seller orders:', err);
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   };
 
@@ -227,6 +292,53 @@ export default function SellerOrders() {
     }
   };
 
+  // Open Rider Selection Modal
+  const openRiderModal = async (order) => {
+    setRiderModalOrder(order);
+    setRiderSearchQuery('');
+    try {
+      setLoadingRiders(true);
+      const districtParam = order.district ? `?district=${encodeURIComponent(order.district)}` : '';
+      const res = await axios.get(getApiUrl(`/api/rider/available${districtParam}`));
+      if (res.data?.success) {
+        setAvailableRiders(res.data.riders || []);
+      }
+    } catch (err) {
+      console.error('Error fetching available riders:', err);
+    } finally {
+      setLoadingRiders(false);
+    }
+  };
+
+  // Assign Rider Handler
+  const handleAssignRider = async (orderId, riderId) => {
+    try {
+      setAssigningRiderId(riderId);
+      const res = await axios.post(getApiUrl('/api/rider/assign'), {
+        orderId,
+        riderId
+      });
+      if (res.data?.success) {
+        setActionNotice({
+          type: 'success',
+          message: lang === 'bn' ? 'রাইডার সফলভাবে নির্ধারণ করা হয়েছে!' : 'Rider assigned successfully!'
+        });
+        setTimeout(() => setActionNotice(null), 3500);
+        setRiderModalOrder(null);
+        fetchOrders(selectedSellerId);
+      }
+    } catch (err) {
+      console.error('Error assigning rider:', err);
+      setActionNotice({
+        type: 'error',
+        message: err.response?.data?.message || (lang === 'bn' ? 'রাইডার নির্ধারণ ব্যর্থ হয়েছে।' : 'Failed to assign rider.')
+      });
+      setTimeout(() => setActionNotice(null), 3500);
+    } finally {
+      setAssigningRiderId(null);
+    }
+  };
+
   // Copy tracking number
   const handleCopyCode = (code) => {
     navigator.clipboard.writeText(code);
@@ -294,7 +406,7 @@ export default function SellerOrders() {
   const totalOrdersCount = orders.length;
   const pendingCount = orders.filter(o => o.order_status === 'PENDING').length;
   const processingCount = orders.filter(o => o.order_status === 'PROCESSING').length;
-  const inTransitOrPickupCount = orders.filter(o => o.order_status === 'SHIPPED' || o.order_status === 'READY_FOR_PICKUP').length;
+  const inTransitOrPickupCount = orders.filter(o => ['SHIPPED', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'DELIVERED_TO_RIDER'].includes(o.order_status)).length;
   const deliveredOrders = orders.filter(o => o.order_status === 'DELIVERED');
   const deliveredRevenue = deliveredOrders.reduce((sum, o) => sum + parseFloat(o.sellerSubtotal || 0), 0);
 
@@ -317,7 +429,7 @@ export default function SellerOrders() {
     if (activeTab === 'PENDING') return order.order_status === 'PENDING';
     if (activeTab === 'PROCESSING') return order.order_status === 'PROCESSING';
     if (activeTab === 'DISPATCHED_OR_READY') {
-      return order.order_status === 'SHIPPED' || order.order_status === 'READY_FOR_PICKUP';
+      return ['SHIPPED', 'READY_FOR_PICKUP', 'RIDER_ASSIGNED', 'DELIVERED_TO_RIDER'].includes(order.order_status);
     }
     if (activeTab === 'DELIVERED') return order.order_status === 'DELIVERED';
     if (activeTab === 'CANCELLED') return order.order_status === 'CANCELLED';
@@ -354,6 +466,18 @@ export default function SellerOrders() {
           bg: 'bg-purple-50 border-purple-200 text-purple-800',
           dot: 'bg-purple-500',
           label: lang === 'bn' ? 'কুরিয়ারে হস্তান্তর সম্পন্ন' : 'Dispatched to Courier'
+        };
+      case 'RIDER_ASSIGNED':
+        return {
+          bg: 'bg-amber-50 border-amber-300 text-amber-900',
+          dot: 'bg-amber-500 animate-pulse',
+          label: lang === 'bn' ? 'রাইডার বরাদ্দ হয়েছে (অপেক্ষমাণ)' : 'Rider Assigned'
+        };
+      case 'DELIVERED_TO_RIDER':
+        return {
+          bg: 'bg-sky-50 border-sky-300 text-sky-900',
+          dot: 'bg-sky-500',
+          label: lang === 'bn' ? 'ডেলিভারি রাইডারের নিকট হস্তান্তরকৃত' : 'Delivered to Rider'
         };
       case 'READY_FOR_PICKUP':
         return {
@@ -409,7 +533,7 @@ export default function SellerOrders() {
     if (order.order_status === 'PENDING') return 0;
     if (order.order_status === 'PROCESSING') return 1;
     if (isPickup && order.order_status === 'READY_FOR_PICKUP') return 2;
-    if (!isPickup && order.order_status === 'SHIPPED') return 2;
+    if (!isPickup && ['SHIPPED', 'RIDER_ASSIGNED', 'DELIVERED_TO_RIDER'].includes(order.order_status)) return 2;
     if (order.order_status === 'DELIVERED') return 3;
     return 0;
   };
@@ -825,6 +949,30 @@ export default function SellerOrders() {
                           <span>{order.delivery_address || (lang === 'bn' ? 'খামারের মূল ফটক থেকে সরাসরি সংগ্রহ' : 'Direct collection from farm gate')}</span>
                         </p>
                       </div>
+
+                      {order.rider_name && (
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="text-slate-400 font-medium block">{lang === 'bn' ? 'নির্ধারিত রাইডার:' : 'Assigned Rider:'}</span>
+                            <span className="font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
+                              <Bike className="w-3.5 h-3.5 text-sky-600" />
+                              <span>{order.rider_name}</span>
+                              <span className="text-[10px] text-slate-500 font-normal">
+                                ({order.rider_vehicle === 'BICYCLE' ? 'বাইসাইকেল' : order.rider_vehicle === 'VAN' ? 'ভ্যান' : 'মোটরসাইকেল'})
+                              </span>
+                            </span>
+                          </div>
+                          {order.rider_phone && (
+                            <a
+                              href={`tel:${order.rider_phone}`}
+                              className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 font-bold flex items-center gap-1 transition-colors"
+                            >
+                              <Phone className="w-3 h-3" />
+                              <span>{order.rider_phone}</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -986,18 +1134,24 @@ export default function SellerOrders() {
                     {order.order_status === 'PROCESSING' && (
                       <>
                         {order.fulfillment_type === 'DELIVERY' ? (
-                          <button
-                            onClick={() => handleUpdateStatus(order.id, 'SHIPPED')}
-                            disabled={isUpdating}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm shadow-purple-600/20 transition-all disabled:opacity-50"
-                          >
-                            {isUpdating ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Truck className="w-3.5 h-3.5" />
-                            )}
-                            <span>{t('markDispatchedBtn')}</span>
-                          </button>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              onClick={() => openRiderModal(order)}
+                              disabled={isUpdating}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md shadow-sky-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              <Bike className="w-3.5 h-3.5" />
+                              <span>{lang === 'bn' ? 'রাইডার নির্বাচন করুন' : 'Select Rider'}</span>
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(order.id, 'SHIPPED')}
+                              disabled={isUpdating}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all cursor-pointer"
+                            >
+                              <Truck className="w-3.5 h-3.5 text-slate-500" />
+                              <span>{t('markDispatchedBtn')}</span>
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={() => handleUpdateStatus(order.id, 'READY_FOR_PICKUP')}
@@ -1013,6 +1167,28 @@ export default function SellerOrders() {
                           </button>
                         )}
                       </>
+                    )}
+
+                    {order.order_status === 'RIDER_ASSIGNED' && (
+                      <div className="flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl">
+                        <Clock className="w-4 h-4 text-amber-600 animate-spin" />
+                        <span>
+                          {lang === 'bn'
+                            ? `রাইডার ${order.rider_name || 'বরাদ্দ হয়েছে'} — রাইডারের অনুমোদনের অপেক্ষা`
+                            : `Rider ${order.rider_name || 'Assigned'} — Awaiting acceptance`}
+                        </span>
+                      </div>
+                    )}
+
+                    {order.order_status === 'DELIVERED_TO_RIDER' && (
+                      <div className="flex items-center gap-2 text-xs font-bold text-sky-800 bg-sky-50 border border-sky-200 px-3.5 py-2 rounded-xl">
+                        <Bike className="w-4 h-4 text-sky-600" />
+                        <span>
+                          {lang === 'bn'
+                            ? `ডেলিভারি রাইডারের নিকট হস্তান্তরকৃত (${order.rider_name || 'রাইডার'})`
+                            : `Handed over to Rider (${order.rider_name || 'Rider'})`}
+                        </span>
+                      </div>
                     )}
 
                     {(order.order_status === 'SHIPPED' || order.order_status === 'READY_FOR_PICKUP') && (
@@ -1382,6 +1558,167 @@ export default function SellerOrders() {
                     <span>{t('deleteOrderModalConfirm')}</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rider Selection & Assignment Modal */}
+      {riderModalOrder && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 space-y-5 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
+                  <Bike className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900 leading-tight">
+                    {lang === 'bn' ? 'ডেলিভারি রাইডার নির্বাচন' : 'Select Delivery Rider'}
+                  </h3>
+                  <span className="text-xs text-slate-500 font-mono">
+                    #{riderModalOrder.order_number}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setRiderModalOrder(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <span className="text-slate-500 font-bold block">{lang === 'bn' ? 'ডেলিভারি গন্তব্য:' : 'Delivery Destination:'}</span>
+              <p className="font-semibold text-slate-800 flex items-start gap-1">
+                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <span>{riderModalOrder.delivery_address}</span>
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700">
+                  {lang === 'bn' ? 'উপলব্ধ ও প্রস্তুত রাইডারদের তালিকা:' : 'Available Idle Riders:'}
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  {availableRiders.length} {lang === 'bn' ? 'জন প্রস্তুত' : 'online'}
+                </span>
+              </div>
+
+              {/* Instant Search Bar */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={riderSearchQuery}
+                  onChange={(e) => setRiderSearchQuery(e.target.value)}
+                  placeholder={lang === 'bn' ? 'নাম, ফোন বা এলাকা দিয়ে রাইডার খুঁজুন...' : 'Search by name, phone or district...'}
+                  className="w-full pl-8.5 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all"
+                />
+                {riderSearchQuery && (
+                  <button
+                    onClick={() => setRiderSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {loadingRiders ? (
+                <div className="py-8 text-center space-y-2">
+                  <RefreshCw className="w-6 h-6 text-sky-600 animate-spin mx-auto" />
+                  <p className="text-xs text-slate-500">{lang === 'bn' ? 'রাইডারদের তালিকা লোড হচ্ছে...' : 'Loading available riders...'}</p>
+                </div>
+              ) : availableRiders.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  {lang === 'bn' ? 'বর্তমানে কোনো সক্রিয় রাইডার পাওয়া যায়নি।' : 'No idle riders available right now.'}
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                  {availableRiders
+                    .filter((rider) => {
+                      if (!riderSearchQuery) return true;
+                      const q = riderSearchQuery.toLowerCase();
+                      return (
+                        rider.full_name?.toLowerCase().includes(q) ||
+                        rider.phone?.toLowerCase().includes(q) ||
+                        rider.district?.toLowerCase().includes(q) ||
+                        rider.division?.toLowerCase().includes(q) ||
+                        rider.vehicle_number?.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((rider) => (
+                      <div
+                        key={rider.id}
+                        className="p-3.5 rounded-2xl border border-slate-200 hover:border-sky-300 hover:bg-sky-50/50 transition-all flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-lg shrink-0">
+                            {rider.vehicle_type === 'BICYCLE' ? '🚲' : rider.vehicle_type === 'PICKUP_VAN' || rider.vehicle_type === 'VAN' ? '🛺' : '🏍️'}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <h4 className="font-extrabold text-sm text-slate-900 leading-tight">
+                                {rider.full_name}
+                              </h4>
+                              {rider.is_nearby > 0 && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                                  {lang === 'bn' ? '📍 নিকটবর্তী' : '📍 Nearby'}
+                                </span>
+                              )}
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                {lang === 'bn' ? 'অনলাইন' : 'IDLE'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-1 flex-wrap">
+                              <span>📱 {rider.phone}</span>
+                              <span>•</span>
+                              <span>📍 {rider.district || rider.division || 'বাংলাদেশ'}</span>
+                              <span>•</span>
+                              <span className="text-amber-700 font-bold">★ {rider.rating_avg}</span>
+                              <span>•</span>
+                              <span>{rider.total_deliveries} ট্রিপ</span>
+                            </div>
+
+                            {rider.vehicle_number && (
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                🚗 {rider.vehicle_number}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleAssignRider(riderModalOrder.id, rider.id)}
+                          disabled={assigningRiderId === rider.id}
+                          className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md shadow-sky-600/25 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer disabled:opacity-50"
+                        >
+                          {assigningRiderId === rider.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          )}
+                          <span>{lang === 'bn' ? 'দায়িত্ব দিন' : 'Assign'}</span>
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => setRiderModalOrder(null)}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                {lang === 'bn' ? 'বাতিল' : 'Cancel'}
               </button>
             </div>
           </div>

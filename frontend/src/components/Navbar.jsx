@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCart } from '../context/CartContext';
-import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package, Layers, Truck, PlusCircle, Wallet, MessageSquare, ShieldAlert, User } from 'lucide-react';
+import { Sprout, ShoppingCart, LogOut, Globe, Menu, X, ShieldCheck, ChevronDown, MapPin, Bookmark, Package, Layers, Truck, PlusCircle, Wallet, MessageSquare, ShieldAlert, User, Bike } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import NotificationBell from './NotificationBell';
 
@@ -181,7 +181,7 @@ export default function Navbar() {
                   <div className="text-left">
                     <span className="block text-xs font-bold leading-tight">{user.fullName}</span>
                     <span className="block text-[10px] text-emerald-700 capitalize font-medium">
-                      {user.role === 'seller' ? t('farmerRole') : user.role === 'admin' ? t('adminRole') : t('buyerRole')}
+                      {user.role === 'seller' ? t('farmerRole') : user.role === 'rider' ? (lang === 'bn' ? 'ডেলিভারি রাইডার' : 'Delivery Rider') : user.role === 'admin' ? t('adminRole') : t('buyerRole')}
                     </span>
                   </div>
                   <ChevronDown className="w-4 h-4 text-emerald-600" />
@@ -283,6 +283,17 @@ export default function Navbar() {
                           {t('sellerProfileTitle')}
                         </Link>
                       </>
+                    )}
+
+                    {user.role === 'rider' && (
+                      <Link
+                        to="/rider/dashboard"
+                        className="flex items-center gap-2 px-4 py-2 text-xs text-emerald-800 hover:bg-emerald-50 font-bold border-b border-emerald-100"
+                        onClick={() => setUserDropdownOpen(false)}
+                      >
+                        <Bike className="w-4 h-4 text-emerald-600" />
+                        {lang === 'bn' ? 'রাইডার পোর্টাল' : 'Rider Portal'}
+                      </Link>
                     )}
 
                     {user.role === 'admin' && (

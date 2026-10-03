@@ -26,6 +26,7 @@ import SellerOrders from './pages/SellerOrders';
 import SellerProfile from './pages/SellerProfile';
 import Messages from './pages/Messages';
 import AdminDashboard from './pages/AdminDashboard';
+import RiderDashboard from './pages/RiderDashboard';
 
 export default function App() {
   return (
@@ -55,6 +56,8 @@ export default function App() {
                     <Route path="/buyer/profile" element={<BuyerProfile />} />
                     <Route path="/messages" element={<Messages />} />
                     <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                    <Route path="/rider/dashboard" element={<RiderDashboard />} />
+                    <Route path="/rider/portal" element={<RiderDashboard />} />
                     <Route path="/seller/dashboard" element={<SellerDashboard />} />
                     <Route path="/seller/inventory" element={<SellerInventory />} />
                     <Route path="/seller/orders" element={<SellerOrders />} />

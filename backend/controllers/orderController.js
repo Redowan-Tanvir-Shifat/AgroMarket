@@ -159,7 +159,7 @@ export const createOrder = async (req, res) => {
 // @route GET /api/orders/my-orders
 export const getMyOrders = async (req, res) => {
   try {
-    const buyerId = req.user ? req.user.id : 1;
+    const buyerId = req.user ? req.user.id : (req.query.userId ? parseInt(req.query.userId) : 1);
 
     // 1. Fetch orders (excluding orders deleted by this buyer, with safe fallback)
     let orders;
@@ -195,11 +195,34 @@ export const getMyOrders = async (req, res) => {
       [orderIds]
     );
 
-    // 3. Attach items to corresponding orders
+    // 3. Fetch rider details if any orders have an assigned rider
+    const riderIds = orders.filter((o) => o.rider_id).map((o) => o.rider_id);
+    let ridersMap = {};
+    if (riderIds.length > 0) {
+      const [riderRows] = await pool.query(
+        `SELECT r.id, r.vehicle_type, r.vehicle_number, r.rating_avg, u.full_name, u.phone
+         FROM riders r
+         JOIN users u ON r.user_id = u.id
+         WHERE r.id IN (?)`,
+        [riderIds]
+      );
+      riderRows.forEach((r) => { ridersMap[r.id] = r; });
+    }
+
+    // 4. Attach items and rider to corresponding orders
     const ordersWithItems = orders.map((order) => {
       const orderItems = items.filter((it) => it.order_id === order.id);
+      const riderInfo = order.rider_id ? ridersMap[order.rider_id] : null;
       return {
         ...order,
+        rider: riderInfo ? {
+          id: riderInfo.id,
+          name: riderInfo.full_name,
+          phone: riderInfo.phone,
+          vehicleType: riderInfo.vehicle_type,
+          vehicleNumber: riderInfo.vehicle_number,
+          rating: riderInfo.rating_avg
+        } : null,
         items: orderItems
       };
     });

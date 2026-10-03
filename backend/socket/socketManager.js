@@ -35,6 +35,13 @@ export const initSocketServer = (httpServer) => {
           socket.join(`seller_${sid}`);
           socket.sellerId = sid;
         }
+
+        const [riders] = await pool.query('SELECT id FROM riders WHERE user_id = ?', [userId]);
+        if (riders.length > 0) {
+          const rid = String(riders[0].id);
+          socket.join(`rider_${rid}`);
+          socket.riderId = rid;
+        }
       } catch (err) {
         // non-blocking
       }
@@ -46,6 +53,14 @@ export const initSocketServer = (httpServer) => {
       const sid = String(sellerId);
       socket.join(`seller_${sid}`);
       socket.sellerId = sid;
+    });
+
+    // 2.1 Rider joins dedicated delivery channel
+    socket.on('join_rider', (riderId) => {
+      if (!riderId) return;
+      const rid = String(riderId);
+      socket.join(`rider_${rid}`);
+      socket.riderId = rid;
     });
 
     // 3. Join active chat room between buyer and farmer
@@ -113,6 +128,14 @@ export const emitToUser = (userId, event, payload) => {
 export const emitToSeller = (sellerId, event, payload) => {
   if (!io || !sellerId) return;
   io.to(`seller_${String(sellerId)}`).emit(event, payload);
+};
+
+/**
+ * Emit event to a specific rider channel
+ */
+export const emitToRider = (riderId, event, payload) => {
+  if (!io || !riderId) return;
+  io.to(`rider_${String(riderId)}`).emit(event, payload);
 };
 
 /**

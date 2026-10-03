@@ -7,35 +7,16 @@ import {
   confirmOrderPayment,
   softDeleteOrder
 } from '../controllers/orderController.js';
-import { verifyToken } from '../middleware/authMiddleware.js';
+import { verifyToken, optionalAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // Public or optional auth for createOrder (so demo guests can also checkout)
-router.post('/', (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return verifyToken(req, res, next);
-  }
-  next();
-}, createOrder);
+router.post('/', optionalAuth, createOrder);
 
 // Authenticated / Soft-auth routes for smooth testing
-router.get('/my-orders', (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return verifyToken(req, res, next);
-  }
-  next();
-}, getMyOrders);
-
-router.post('/:id/reorder', (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return verifyToken(req, res, next);
-  }
-  next();
-}, reorderOrder);
+router.get('/my-orders', optionalAuth, getMyOrders);
+router.post('/:id/reorder', optionalAuth, reorderOrder);
 
 router.patch('/:id/status', updateOrderStatus);
 router.patch('/:id/confirm-payment', (req, res, next) => {

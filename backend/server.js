@@ -12,6 +12,7 @@ import uploadRoutes from './routes/uploadRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import riderRoutes from './routes/riderRoutes.js';
 import { initSocketServer } from './socket/socketManager.js';
 
 dotenv.config();
@@ -38,6 +39,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/rider', riderRoutes);
 
 // Root and Health check endpoints
 app.get('/', (req, res) => {
